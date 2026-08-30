@@ -1,3 +1,4 @@
+```php
 <?php
 require 'config.php';
 
@@ -7,8 +8,10 @@ require 'config.php';
 // =====================================================
 
 if (!isset($_SESSION['user'])) {
+
     header("Location: login.php");
     exit;
+
 }
 
 
@@ -34,7 +37,9 @@ if (
     $phone === '' ||
     $address === ''
 ) {
+
     die("ข้อมูลไม่ครบ กรุณากลับไปกรอกข้อมูลใหม่");
+
 }
 
 
@@ -56,7 +61,12 @@ $stmt = $conn->prepare("
 ");
 
 if (!$stmt) {
-    die("SQL Error: " . htmlspecialchars($conn->error));
+
+    die(
+        "SQL Error: "
+        . htmlspecialchars($conn->error)
+    );
+
 }
 
 $stmt->bind_param(
@@ -73,8 +83,16 @@ $product = $result->fetch_assoc();
 $stmt->close();
 
 
+// =====================================================
+// ตรวจสอบสินค้า
+// =====================================================
+
 if (!$product) {
-    die("ไม่พบสินค้านี้ หรือสินค้านี้ไม่พร้อมขาย");
+
+    die(
+        "ไม่พบสินค้านี้ หรือสินค้านี้ไม่พร้อมขาย"
+    );
+
 }
 
 
@@ -85,7 +103,20 @@ if (!$product) {
 $seller_id = (int)$product['seller_id'];
 
 if ($seller_id <= 0) {
+
     die("ไม่พบข้อมูลผู้ขายของสินค้านี้");
+
+}
+
+
+// =====================================================
+// ป้องกันการซื้อสินค้าของตัวเอง
+// =====================================================
+
+if ($buyer_id === $seller_id) {
+
+    die("คุณไม่สามารถซื้อสินค้าของตัวเองได้");
+
 }
 
 
@@ -125,10 +156,12 @@ $stmt = $conn->prepare("
 ");
 
 if (!$stmt) {
+
     die(
         "ไม่สามารถเตรียมคำสั่งซื้อได้: "
         . htmlspecialchars($conn->error)
     );
+
 }
 
 
@@ -168,8 +201,7 @@ $stmt->close();
 
 $stmt = $conn->prepare("
     UPDATE products
-    SET status = 'sold',
-        sale_status = 'sold'
+    SET status = 'sold'
     WHERE id = ?
 ");
 
@@ -183,6 +215,7 @@ if ($stmt) {
     $stmt->execute();
 
     $stmt->close();
+
 }
 
 ?>
@@ -215,33 +248,56 @@ if ($stmt) {
 <style>
 
 body {
+
     background:#f5f6f8;
+
 }
+
 
 .success-box {
+
     max-width:700px;
+
     margin:60px auto;
+
 }
+
 
 .card {
+
     border:0;
+
     border-radius:20px;
+
 }
+
 
 .success-icon {
+
     font-size:70px;
+
 }
+
 
 .price {
+
     color:#dc3545;
+
     font-size:28px;
+
     font-weight:bold;
+
 }
 
+
 .order-id {
+
     background:#f8f9fa;
+
     border-radius:12px;
+
     padding:15px;
+
 }
 
 </style>
@@ -373,7 +429,9 @@ body {
 📦 สถานะคำสั่งซื้อ:
 
 <strong>
+
 รอตรวจสอบ
+
 </strong>
 
 <br>
@@ -420,7 +478,7 @@ body {
 </div>
 
 
-
 </body>
 
 </html>
+```
