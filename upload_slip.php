@@ -3,13 +3,16 @@
 
 require 'config.php';
 
+
 // =====================================================
 // ตรวจสอบ Login
 // =====================================================
 
 if (!isset($_SESSION['user']['id'])) {
+
     header("Location: login.php");
     exit;
+
 }
 
 $buyer_id = (int)$_SESSION['user']['id'];
@@ -26,7 +29,9 @@ $order_id = (int)(
 );
 
 if ($order_id <= 0) {
+
     die("ไม่พบหมายเลขออเดอร์");
+
 }
 
 
@@ -40,21 +45,28 @@ $stmt = $conn->prepare("
         o.buyer_id,
         o.product_id,
         o.total_price,
-        o.price,
         o.status,
         o.payment_slip,
-        o.payment_status,
         p.name AS product_name
     FROM orders o
-    JOIN products p
+
+    INNER JOIN products p
         ON o.product_id = p.id
-    WHERE o.id = ?
-      AND o.buyer_id = ?
+
+    WHERE
+        o.id = ?
+        AND o.buyer_id = ?
+
     LIMIT 1
 ");
 
 if (!$stmt) {
-    die("เกิดข้อผิดพลาด SQL: " . htmlspecialchars($conn->error));
+
+    die(
+        "เกิดข้อผิดพลาด SQL: "
+        . htmlspecialchars($conn->error)
+    );
+
 }
 
 $stmt->bind_param(
@@ -71,7 +83,9 @@ $stmt->close();
 
 
 if (!$order) {
+
     die("ไม่พบออเดอร์ หรือออเดอร์นี้ไม่ใช่ของคุณ");
+
 }
 
 
@@ -79,24 +93,11 @@ $product_id = (int)$order['product_id'];
 
 $product_name = $order['product_name'];
 
-
-// =====================================================
-// ราคาสินค้า
-// รองรับทั้งระบบเก่า price และระบบใหม่ total_price
-// =====================================================
-
-if (
-    isset($order['total_price']) &&
-    $order['total_price'] !== null
-) {
-    $order_price = (float)$order['total_price'];
-} else {
-    $order_price = (float)($order['price'] ?? 0);
-}
+$total_price = (float)$order['total_price'];
 
 
 // =====================================================
-// ถ้ายังไม่ได้ส่ง POST
+// ถ้ายังไม่ได้ POST
 // แสดงหน้าอัปโหลดสลิป
 // =====================================================
 
@@ -141,7 +142,9 @@ body {
 
 </head>
 
+
 <body>
+
 
 <div class="container">
 
@@ -149,17 +152,20 @@ body {
 
 <div class="card-body p-5">
 
+
 <h2 class="fw-bold mb-4">
-💳 ชำระเงิน
+💰 ชำระเงิน
 </h2>
+
 
 <h5>
 <?= htmlspecialchars($product_name) ?>
 </h5>
 
+
 <div class="fs-3 fw-bold text-danger mb-4">
 
-฿<?= number_format($order_price, 2) ?>
+฿<?= number_format($total_price, 2) ?>
 
 </div>
 
@@ -170,6 +176,7 @@ body {
     enctype="multipart/form-data"
 >
 
+
 <input
     type="hidden"
     name="order_id"
@@ -178,8 +185,11 @@ body {
 
 
 <label class="form-label fw-bold">
+
 📷 เลือกไฟล์สลิป
+
 </label>
+
 
 <input
     type="file"
@@ -217,13 +227,16 @@ body {
 
 </a>
 
+
 </form>
 
-</div>
 
 </div>
 
 </div>
+
+</div>
+
 
 </body>
 
@@ -237,14 +250,16 @@ endif;
 
 
 // =====================================================
-// ตรวจสอบไฟล์
+// ตรวจสอบว่ามีไฟล์
 // =====================================================
 
 if (
     !isset($_FILES['slip']) ||
     $_FILES['slip']['error'] === UPLOAD_ERR_NO_FILE
 ) {
+
     die("กรุณาเลือกไฟล์สลิป");
+
 }
 
 
@@ -266,8 +281,7 @@ if ($file['error'] !== UPLOAD_ERR_OK) {
 
 
 // =====================================================
-// ตรวจสอบขนาดไฟล์
-// 5 MB
+// จำกัดขนาด 5 MB
 // =====================================================
 
 $max_size = 5 * 1024 * 1024;
@@ -291,7 +305,9 @@ $mime = $finfo->file($file['tmp_name']);
 $allowed = [
 
     'image/jpeg' => 'jpg',
-    'image/png'  => 'png',
+
+    'image/png' => 'png',
+
     'image/webp' => 'webp'
 
 ];
@@ -310,16 +326,23 @@ $extension = $allowed[$mime];
 
 
 // =====================================================
-// โฟลเดอร์เก็บไฟล์
+// Railway Volume
 //
-// Railway Volume:
-// /var/www/html/uploads
+// สำคัญมาก
 //
-// __DIR__:
 // /var/www/html
+//      └── uploads
+//           └── payment_slips
+//
 // =====================================================
 
-$upload_dir = __DIR__ . '/uploads/';
+$upload_dir =
+    __DIR__
+    . DIRECTORY_SEPARATOR
+    . 'uploads'
+    . DIRECTORY_SEPARATOR
+    . 'payment_slips'
+    . DIRECTORY_SEPARATOR;
 
 
 // =====================================================
@@ -331,7 +354,7 @@ if (!is_dir($upload_dir)) {
     if (!mkdir($upload_dir, 0777, true)) {
 
         die(
-            "ไม่สามารถสร้างโฟลเดอร์ uploads ได้<br><br>"
+            "ไม่สามารถสร้างโฟลเดอร์เก็บสลิปได้<br><br>"
             . htmlspecialchars($upload_dir)
         );
 
@@ -341,13 +364,13 @@ if (!is_dir($upload_dir)) {
 
 
 // =====================================================
-// ตรวจสอบเขียนไฟล์ได้
+// ตรวจสอบสิทธิ์เขียน
 // =====================================================
 
 if (!is_writable($upload_dir)) {
 
     die(
-        "โฟลเดอร์ uploads ไม่สามารถเขียนไฟล์ได้<br><br>"
+        "โฟลเดอร์เก็บสลิปไม่สามารถเขียนไฟล์ได้<br><br>"
         . htmlspecialchars($upload_dir)
     );
 
@@ -358,30 +381,33 @@ if (!is_writable($upload_dir)) {
 // สร้างชื่อไฟล์
 // =====================================================
 
-$random = bin2hex(random_bytes(8));
+$random = bin2hex(
+    random_bytes(8)
+);
+
 
 $filename =
-    'slip_order_' .
-    $order_id .
-    '_' .
-    time() .
-    '_' .
-    $random .
-    '.' .
-    $extension;
+    'slip_'
+    . $order_id
+    . '_'
+    . time()
+    . '_'
+    . $random
+    . '.'
+    . $extension;
 
 
 // =====================================================
-// Path จริงบน Server
+// ตำแหน่งไฟล์จริง
 // =====================================================
 
 $destination =
-    $upload_dir .
-    $filename;
+    $upload_dir
+    . $filename;
 
 
 // =====================================================
-// ย้ายไฟล์จาก Temporary
+// ย้ายไฟล์
 // =====================================================
 
 if (!move_uploaded_file(
@@ -390,9 +416,20 @@ if (!move_uploaded_file(
 )) {
 
     die(
-        "ไม่สามารถบันทึกไฟล์สลิปได้<br><br>"
-        . "ตำแหน่งที่พยายามบันทึก:<br>"
-        . htmlspecialchars($destination)
+        "ไม่สามารถบันทึกไฟล์สลิปได้"
+    );
+
+}
+
+
+// =====================================================
+// ตรวจสอบว่าไฟล์ถูกสร้างจริง
+// =====================================================
+
+if (!file_exists($destination)) {
+
+    die(
+        "อัปโหลดสำเร็จแต่ไม่พบไฟล์ในเซิร์ฟเวอร์"
     );
 
 }
@@ -401,13 +438,12 @@ if (!move_uploaded_file(
 // =====================================================
 // Path ที่เก็บใน Database
 //
-// ตัวอย่าง:
-// uploads/slip_order_4_1788125181_a82fd91.webp
+// ต้องตรงกับตำแหน่งไฟล์จริง
 // =====================================================
 
 $slip_path =
-    'uploads/' .
-    $filename;
+    'uploads/payment_slips/'
+    . $filename;
 
 
 // =====================================================
@@ -419,9 +455,11 @@ $payment_status = 'pending';
 
 $stmt = $conn->prepare("
     UPDATE orders
+
     SET
         payment_slip = ?,
         payment_status = ?
+
     WHERE
         id = ?
         AND buyer_id = ?
@@ -430,6 +468,7 @@ $stmt = $conn->prepare("
 
 if (!$stmt) {
 
+    // ถ้า SQL ผิด ให้ลบไฟล์
     if (file_exists($destination)) {
         unlink($destination);
     }
@@ -458,7 +497,7 @@ if (!$stmt->execute()) {
     }
 
     die(
-        "บันทึกข้อมูลสลิปไม่สำเร็จ:<br>"
+        "บันทึกสลิปลงฐานข้อมูลไม่สำเร็จ:<br>"
         . htmlspecialchars($stmt->error)
     );
 
@@ -468,17 +507,22 @@ $stmt->close();
 
 
 // =====================================================
-// ดึงข้อมูลผู้ขาย
+// ดึง seller_id
 // =====================================================
 
 $stmt = $conn->prepare("
     SELECT
-        p.seller_id,
-        p.name AS product_name
-    FROM products p
-    WHERE p.id = ?
+        seller_id,
+        name
+    FROM products
+
+    WHERE id = ?
+
     LIMIT 1
 ");
+
+
+$seller_id = 0;
 
 
 if ($stmt) {
@@ -490,13 +534,19 @@ if ($stmt) {
 
     $stmt->execute();
 
-    $product = $stmt->get_result()->fetch_assoc();
+    $product = $stmt
+        ->get_result()
+        ->fetch_assoc();
 
     $stmt->close();
 
-} else {
 
-    $product = null;
+    if ($product) {
+
+        $seller_id =
+            (int)$product['seller_id'];
+
+    }
 
 }
 
@@ -505,14 +555,10 @@ if ($stmt) {
 // สร้าง Notification ให้ผู้ขาย
 // =====================================================
 
-if ($product) {
-
-    $seller_id =
-        (int)$product['seller_id'];
-
+if ($seller_id > 0) {
 
     $title =
-        "💳 มีสลิปใหม่รอตรวจสอบ";
+        "💰 มีสลิปใหม่รอตรวจสอบ";
 
 
     $message =
@@ -520,20 +566,14 @@ if ($product) {
         . $product_name
         . "\"\n\n"
         . "💰 ยอดเงิน: ฿"
-        . number_format($order_price, 2)
+        . number_format($total_price, 2)
         . "\n"
         . "📋 กรุณาตรวจสอบสลิป";
 
 
     $link =
-        "order_detail.php?id=" .
-        $order_id;
+        "seller_orders.php";
 
-
-    /*
-     * ตรวจสอบว่าตาราง notifications
-     * มีโครงสร้างตามระบบปัจจุบัน
-     */
 
     $stmt_notify = $conn->prepare("
         INSERT INTO notifications
@@ -547,6 +587,7 @@ if ($product) {
             is_read,
             created_at
         )
+
         VALUES
         (
             ?,
