@@ -1,16 +1,11 @@
-
+```php
 <?php
 
-require_once __DIR__ . '/config.php';
+require 'config.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-
-/* =====================================================
-   LOGIN
-===================================================== */
+// =====================================================
+// ตรวจสอบ Login
+// =====================================================
 
 if (!isset($_SESSION['user']['id'])) {
     header("Location: login.php");
@@ -20,9 +15,9 @@ if (!isset($_SESSION['user']['id'])) {
 $buyer_id = (int)$_SESSION['user']['id'];
 
 
-/* =====================================================
-   ORDER ID
-===================================================== */
+// =====================================================
+// รับ order_id
+// =====================================================
 
 $order_id = (int)(
     $_POST['order_id']
@@ -35,10 +30,9 @@ if ($order_id <= 0) {
 }
 
 
-/* =====================================================
-   ดึงข้อมูลออเดอร์
-   ตาราง orders ของคุณใช้ total_price
-===================================================== */
+// =====================================================
+// ดึงข้อมูลออเดอร์
+// =====================================================
 
 $stmt = $conn->prepare("
     SELECT
@@ -46,13 +40,13 @@ $stmt = $conn->prepare("
         o.buyer_id,
         o.product_id,
         o.total_price,
+        o.price,
         o.status,
         o.payment_slip,
-        o.payment_method,
-        o.payment_slip,
+        o.payment_status,
         p.name AS product_name
     FROM orders o
-    INNER JOIN products p
+    JOIN products p
         ON o.product_id = p.id
     WHERE o.id = ?
       AND o.buyer_id = ?
@@ -60,10 +54,7 @@ $stmt = $conn->prepare("
 ");
 
 if (!$stmt) {
-    die(
-        "SQL Error: " .
-        htmlspecialchars($conn->error)
-    );
+    die("เกิดข้อผิดพลาด SQL: " . htmlspecialchars($conn->error));
 }
 
 $stmt->bind_param(
@@ -88,13 +79,26 @@ $product_id = (int)$order['product_id'];
 
 $product_name = $order['product_name'];
 
-$total_price = (float)$order['total_price'];
+
+// =====================================================
+// ราคาสินค้า
+// รองรับทั้งระบบเก่า price และระบบใหม่ total_price
+// =====================================================
+
+if (
+    isset($order['total_price']) &&
+    $order['total_price'] !== null
+) {
+    $order_price = (float)$order['total_price'];
+} else {
+    $order_price = (float)($order['price'] ?? 0);
+}
 
 
-/* =====================================================
-   ถ้ายังไม่ได้ POST
-   แสดงหน้าเลือกสลิป
-===================================================== */
+// =====================================================
+// ถ้ายังไม่ได้ส่ง POST
+// แสดงหน้าอัปโหลดสลิป
+// =====================================================
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST'):
 
@@ -113,9 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST'):
     content="width=device-width, initial-scale=1"
 >
 
-<title>
-อัปโหลดสลิป - PD Shop
-</title>
+<title>อัปโหลดสลิป - PD Shop</title>
 
 <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
@@ -130,7 +132,7 @@ body {
 
 .upload-box {
     max-width:600px;
-    margin:70px auto;
+    margin:80px auto;
     border:0;
     border-radius:20px;
 }
@@ -151,23 +153,13 @@ body {
 💳 ชำระเงิน
 </h2>
 
-<h5 class="mb-3">
-
+<h5>
 <?= htmlspecialchars($product_name) ?>
-
 </h5>
 
 <div class="fs-3 fw-bold text-danger mb-4">
 
-฿<?= number_format($total_price, 2) ?>
-
-</div>
-
-
-<div class="alert alert-info">
-
-📌 หลังจากโอนเงินแล้ว
-กรุณาแนบสลิปเพื่อให้ผู้ขายตรวจสอบ
+฿<?= number_format($order_price, 2) ?>
 
 </div>
 
@@ -186,11 +178,8 @@ body {
 
 
 <label class="form-label fw-bold">
-
 📷 เลือกไฟล์สลิป
-
 </label>
-
 
 <input
     type="file"
@@ -247,25 +236,24 @@ exit;
 endif;
 
 
-/* =====================================================
-   ตรวจสอบไฟล์
-===================================================== */
+// =====================================================
+// ตรวจสอบไฟล์
+// =====================================================
 
 if (
     !isset($_FILES['slip']) ||
     $_FILES['slip']['error'] === UPLOAD_ERR_NO_FILE
 ) {
-
     die("กรุณาเลือกไฟล์สลิป");
-
 }
+
 
 $file = $_FILES['slip'];
 
 
-/* =====================================================
-   UPLOAD ERROR
-===================================================== */
+// =====================================================
+// ตรวจสอบ Upload Error
+// =====================================================
 
 if ($file['error'] !== UPLOAD_ERR_OK) {
 
@@ -277,9 +265,10 @@ if ($file['error'] !== UPLOAD_ERR_OK) {
 }
 
 
-/* =====================================================
-   FILE SIZE
-===================================================== */
+// =====================================================
+// ตรวจสอบขนาดไฟล์
+// 5 MB
+// =====================================================
 
 $max_size = 5 * 1024 * 1024;
 
@@ -290,23 +279,19 @@ if ($file['size'] > $max_size) {
 }
 
 
-/* =====================================================
-   ตรวจ MIME จริง
-===================================================== */
+// =====================================================
+// ตรวจสอบ MIME จริง
+// =====================================================
 
 $finfo = new finfo(FILEINFO_MIME_TYPE);
 
-$mime = $finfo->file(
-    $file['tmp_name']
-);
+$mime = $finfo->file($file['tmp_name']);
 
 
 $allowed = [
 
     'image/jpeg' => 'jpg',
-
-    'image/png' => 'png',
-
+    'image/png'  => 'png',
     'image/webp' => 'webp'
 
 ];
@@ -324,31 +309,30 @@ if (!isset($allowed[$mime])) {
 $extension = $allowed[$mime];
 
 
-/* =====================================================
-   สร้างโฟลเดอร์
-   /var/www/html/uploads/payment_slips/
-===================================================== */
+// =====================================================
+// โฟลเดอร์เก็บไฟล์
+//
+// Railway Volume:
+// /var/www/html/uploads
+//
+// __DIR__:
+// /var/www/html
+// =====================================================
 
-$upload_dir =
-    __DIR__ .
-    DIRECTORY_SEPARATOR .
-    'uploads' .
-    DIRECTORY_SEPARATOR .
-    'payment_slips' .
-    DIRECTORY_SEPARATOR;
+$upload_dir = __DIR__ . '/uploads/';
 
+
+// =====================================================
+// สร้างโฟลเดอร์ถ้ายังไม่มี
+// =====================================================
 
 if (!is_dir($upload_dir)) {
 
-    if (!mkdir(
-        $upload_dir,
-        0777,
-        true
-    )) {
+    if (!mkdir($upload_dir, 0777, true)) {
 
         die(
-            "ไม่สามารถสร้างโฟลเดอร์เก็บสลิปได้<br><br>" .
-            htmlspecialchars($upload_dir)
+            "ไม่สามารถสร้างโฟลเดอร์ uploads ได้<br><br>"
+            . htmlspecialchars($upload_dir)
         );
 
     }
@@ -356,28 +340,25 @@ if (!is_dir($upload_dir)) {
 }
 
 
-/* =====================================================
-   ตรวจสอบเขียนไฟล์ได้
-===================================================== */
+// =====================================================
+// ตรวจสอบเขียนไฟล์ได้
+// =====================================================
 
 if (!is_writable($upload_dir)) {
 
     die(
-        "โฟลเดอร์เก็บสลิปไม่สามารถเขียนได้<br><br>" .
-        htmlspecialchars($upload_dir)
+        "โฟลเดอร์ uploads ไม่สามารถเขียนไฟล์ได้<br><br>"
+        . htmlspecialchars($upload_dir)
     );
 
 }
 
 
-/* =====================================================
-   สร้างชื่อไฟล์
-===================================================== */
+// =====================================================
+// สร้างชื่อไฟล์
+// =====================================================
 
-$random = bin2hex(
-    random_bytes(8)
-);
-
+$random = bin2hex(random_bytes(8));
 
 $filename =
     'slip_order_' .
@@ -390,18 +371,18 @@ $filename =
     $extension;
 
 
-/* =====================================================
-   Path จริง
-===================================================== */
+// =====================================================
+// Path จริงบน Server
+// =====================================================
 
 $destination =
     $upload_dir .
     $filename;
 
 
-/* =====================================================
-   ย้ายไฟล์
-===================================================== */
+// =====================================================
+// ย้ายไฟล์จาก Temporary
+// =====================================================
 
 if (!move_uploaded_file(
     $file['tmp_name'],
@@ -409,45 +390,38 @@ if (!move_uploaded_file(
 )) {
 
     die(
-        "ไม่สามารถบันทึกไฟล์สลิปได้"
+        "ไม่สามารถบันทึกไฟล์สลิปได้<br><br>"
+        . "ตำแหน่งที่พยายามบันทึก:<br>"
+        . htmlspecialchars($destination)
     );
 
 }
 
 
-/* =====================================================
-   Path สำหรับ Browser
-===================================================== */
+// =====================================================
+// Path ที่เก็บใน Database
+//
+// ตัวอย่าง:
+// uploads/slip_order_4_1788125181_a82fd91.webp
+// =====================================================
 
 $slip_path =
-    'uploads/payment_slips/' .
+    'uploads/' .
     $filename;
 
 
-/* =====================================================
-   ตรวจสอบว่าไฟล์มีจริง
-===================================================== */
+// =====================================================
+// อัปเดต orders
+// =====================================================
 
-if (!file_exists($destination)) {
+$payment_status = 'pending';
 
-    die(
-        "อัปโหลดสำเร็จแต่ไม่พบไฟล์ในเซิร์ฟเวอร์"
-    );
-
-}
-
-
-/* =====================================================
-   อัปเดต orders
-===================================================== */
 
 $stmt = $conn->prepare("
     UPDATE orders
-
     SET
         payment_slip = ?,
-        status = 'pending'
-
+        payment_status = ?
     WHERE
         id = ?
         AND buyer_id = ?
@@ -456,19 +430,22 @@ $stmt = $conn->prepare("
 
 if (!$stmt) {
 
-    unlink($destination);
+    if (file_exists($destination)) {
+        unlink($destination);
+    }
 
     die(
-        "SQL Error: " .
-        htmlspecialchars($conn->error)
+        "เกิดข้อผิดพลาด SQL:<br>"
+        . htmlspecialchars($conn->error)
     );
 
 }
 
 
 $stmt->bind_param(
-    "sii",
+    "ssii",
     $slip_path,
+    $payment_status,
     $order_id,
     $buyer_id
 );
@@ -476,31 +453,33 @@ $stmt->bind_param(
 
 if (!$stmt->execute()) {
 
-    unlink($destination);
+    if (file_exists($destination)) {
+        unlink($destination);
+    }
 
     die(
-        "บันทึกสลิปลงฐานข้อมูลไม่สำเร็จ:<br>" .
-        htmlspecialchars($stmt->error)
+        "บันทึกข้อมูลสลิปไม่สำเร็จ:<br>"
+        . htmlspecialchars($stmt->error)
     );
 
 }
 
-
 $stmt->close();
 
 
-/* =====================================================
-   แจ้งเตือนผู้ขาย
-===================================================== */
+// =====================================================
+// ดึงข้อมูลผู้ขาย
+// =====================================================
 
 $stmt = $conn->prepare("
     SELECT
-        seller_id,
-        name
-    FROM products
-    WHERE id = ?
+        p.seller_id,
+        p.name AS product_name
+    FROM products p
+    WHERE p.id = ?
     LIMIT 1
 ");
+
 
 if ($stmt) {
 
@@ -511,96 +490,101 @@ if ($stmt) {
 
     $stmt->execute();
 
-    $product =
-        $stmt->get_result()->fetch_assoc();
+    $product = $stmt->get_result()->fetch_assoc();
 
     $stmt->close();
 
+} else {
 
-    if ($product) {
+    $product = null;
 
-        $seller_id =
-            (int)$product['seller_id'];
-
-
-        $title =
-            "💰 มีสลิปใหม่รอตรวจสอบ";
+}
 
 
-        $message =
-            "ผู้ซื้อส่งหลักฐานการชำระเงินสำหรับสินค้า \"" .
-            $product_name .
-            "\"\n\n" .
-            "💰 ยอดเงิน: ฿" .
-            number_format(
-                $total_price,
-                2
-            ) .
-            "\n📋 กรุณาตรวจสอบสลิป";
+// =====================================================
+// สร้าง Notification ให้ผู้ขาย
+// =====================================================
+
+if ($product) {
+
+    $seller_id =
+        (int)$product['seller_id'];
 
 
-        $link =
-            "seller_orders.php";
+    $title =
+        "💳 มีสลิปใหม่รอตรวจสอบ";
 
 
-        /*
-         * ตรวจสอบก่อนว่า notifications
-         * มีอยู่จริงและ insert ได้
-         */
-
-        $stmt_notify = $conn->prepare("
-            INSERT INTO notifications
-            (
-                user_id,
-                product_id,
-                buyer_id,
-                title,
-                message,
-                link,
-                is_read,
-                created_at
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                0,
-                NOW()
-            )
-        ");
+    $message =
+        "ผู้ซื้อส่งหลักฐานการชำระเงินสำหรับสินค้า \""
+        . $product_name
+        . "\"\n\n"
+        . "💰 ยอดเงิน: ฿"
+        . number_format($order_price, 2)
+        . "\n"
+        . "📋 กรุณาตรวจสอบสลิป";
 
 
-        if ($stmt_notify) {
-
-            $stmt_notify->bind_param(
-                "iiisss",
-                $seller_id,
-                $product_id,
-                $buyer_id,
-                $title,
-                $message,
-                $link
-            );
+    $link =
+        "order_detail.php?id=" .
+        $order_id;
 
 
-            $stmt_notify->execute();
+    /*
+     * ตรวจสอบว่าตาราง notifications
+     * มีโครงสร้างตามระบบปัจจุบัน
+     */
 
-            $stmt_notify->close();
+    $stmt_notify = $conn->prepare("
+        INSERT INTO notifications
+        (
+            user_id,
+            product_id,
+            buyer_id,
+            title,
+            message,
+            link,
+            is_read,
+            created_at
+        )
+        VALUES
+        (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            0,
+            NOW()
+        )
+    ");
 
-        }
+
+    if ($stmt_notify) {
+
+        $stmt_notify->bind_param(
+            "iiisss",
+            $seller_id,
+            $product_id,
+            $buyer_id,
+            $title,
+            $message,
+            $link
+        );
+
+        $stmt_notify->execute();
+
+        $stmt_notify->close();
 
     }
 
 }
 
 
-/* =====================================================
-   สำเร็จ
-===================================================== */
+// =====================================================
+// สำเร็จ
+// =====================================================
 
 header(
     "Location: my_orders.php?slip=success"
