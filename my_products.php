@@ -1,3 +1,4 @@
+```php
 <?php
 require 'config.php';
 
@@ -20,8 +21,12 @@ if (isset($_GET['delete'])) {
     $stmt = $conn->prepare("
         DELETE FROM products
         WHERE id = ?
-        AND user_id = ?
+        AND seller_id = ?
     ");
+
+    if (!$stmt) {
+        die("SQL Error: " . htmlspecialchars($conn->error));
+    }
 
     $stmt->bind_param(
         "ii",
@@ -30,6 +35,7 @@ if (isset($_GET['delete'])) {
     );
 
     $stmt->execute();
+    $stmt->close();
 
     header("Location: my_products.php");
     exit;
@@ -38,8 +44,8 @@ if (isset($_GET['delete'])) {
 
 /* =====================================================
    ดึงสินค้าของเรา
-   ⭐ ไม่กรอง status
-   จึงเห็นทั้งขายอยู่ / ขายแล้ว / รอตรวจสอบ / ไม่อนุมัติ
+   เห็นทั้ง:
+   ขายอยู่ / ขายแล้ว / รอตรวจสอบ / ไม่อนุมัติ
 ===================================================== */
 
 $stmt = $conn->prepare("
@@ -49,9 +55,13 @@ $stmt = $conn->prepare("
     FROM products p
     LEFT JOIN categories c
         ON p.category_id = c.id
-    WHERE p.user_id = ?
+    WHERE p.seller_id = ?
     ORDER BY p.created_at DESC
 ");
+
+if (!$stmt) {
+    die("SQL Error: " . htmlspecialchars($conn->error));
+}
 
 $stmt->bind_param(
     "i",
@@ -64,7 +74,7 @@ $products = $stmt->get_result();
 
 
 /* =====================================================
-   สถิติ
+   สถิติสินค้า
 ===================================================== */
 
 $total_products = 0;
@@ -79,8 +89,12 @@ $stmt_count = $conn->prepare("
         SUM(status = 'sold') AS sold,
         SUM(status = 'pending') AS pending
     FROM products
-    WHERE user_id = ?
+    WHERE seller_id = ?
 ");
+
+if (!$stmt_count) {
+    die("SQL Error: " . htmlspecialchars($conn->error));
+}
 
 $stmt_count->bind_param(
     "i",
@@ -89,12 +103,23 @@ $stmt_count->bind_param(
 
 $stmt_count->execute();
 
-$stats = $stmt_count->get_result()->fetch_assoc();
+$stats = $stmt_count
+    ->get_result()
+    ->fetch_assoc();
 
-$total_products = (int)($stats['total'] ?? 0);
-$approved_products = (int)($stats['approved'] ?? 0);
-$sold_products = (int)($stats['sold'] ?? 0);
-$pending_products = (int)($stats['pending'] ?? 0);
+$stmt_count->close();
+
+$total_products =
+    (int)($stats['total'] ?? 0);
+
+$approved_products =
+    (int)($stats['approved'] ?? 0);
+
+$sold_products =
+    (int)($stats['sold'] ?? 0);
+
+$pending_products =
+    (int)($stats['pending'] ?? 0);
 
 ?>
 
@@ -112,7 +137,7 @@ $pending_products = (int)($stats['pending'] ?? 0);
 >
 
 <title>
-สินค้าของฉัน -PD Shop
+สินค้าของฉัน - PD Shop
 </title>
 
 <link
@@ -123,34 +148,38 @@ $pending_products = (int)($stats['pending'] ?? 0);
 <style>
 
 body {
-    background:#f5f6f8;
+    background: #f5f6f8;
 }
 
 .card {
-    border:0;
-    border-radius:16px;
-    overflow:hidden;
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
 }
 
 .product-img {
-    width:100%;
-    height:220px;
-    object-fit:cover;
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
 }
 
 .stat-card {
-    border-radius:16px;
-    border:0;
+    border-radius: 16px;
+    border: 0;
 }
 
 .price {
-    color:#dc2626;
-    font-size:22px;
-    font-weight:bold;
+    color: #dc2626;
+    font-size: 22px;
+    font-weight: bold;
 }
 
 .status-badge {
-    font-size:13px;
+    font-size: 13px;
+}
+
+.navbar-brand {
+    font-size: 22px;
 }
 
 </style>
@@ -169,19 +198,15 @@ body {
 
 <div class="container">
 
-
 <a
     href="index.php"
     class="navbar-brand fw-bold text-dark text-decoration-none"
 >
-
 🛒 PD Shop
-
 </a>
 
 
 <div class="d-flex flex-wrap gap-2">
-
 
 <a
     href="messages.php"
@@ -227,7 +252,7 @@ body {
     href="sell.php"
     class="btn btn-outline-dark"
 >
-ลงขายสินค้า
+➕ ลงขายสินค้า
 </a>
 
 
@@ -243,9 +268,8 @@ body {
     href="logout.php"
     class="btn btn-dark"
 >
-ออกจากระบบ
+🚪 ออกจากระบบ
 </a>
-
 
 </div>
 
@@ -375,7 +399,6 @@ body {
 
 <?php if ($products->num_rows === 0): ?>
 
-
 <div class="card shadow-sm p-5 text-center">
 
 <div style="font-size:70px">
@@ -410,7 +433,6 @@ body {
 
 
 <div class="col-md-4">
-
 
 <div class="card shadow-sm h-100">
 
@@ -485,7 +507,7 @@ if ($status === 'approved') {
 
 <span class="badge <?= $status_class ?> status-badge mb-2">
 
-<?= $status_text ?>
+<?= htmlspecialchars($status_text) ?>
 
 </span>
 
@@ -518,7 +540,7 @@ if ($status === 'approved') {
 <div class="price">
 
 ฿<?= number_format(
-    $p['price'],
+    (float)$p['price'],
     2
 ) ?>
 
@@ -533,7 +555,7 @@ if ($status === 'approved') {
 สภาพ:
 
 <?= htmlspecialchars(
-    $p['item_condition']
+    $p['item_condition'] ?? '-'
 ) ?>
 
 </p>
@@ -542,13 +564,13 @@ if ($status === 'approved') {
 
 <!-- =================================================
      BUTTONS
-================================================= -->
+===================================================== -->
 
 <a
     href="product.php?id=<?= (int)$p['id'] ?>"
     class="btn btn-outline-dark w-100 mb-2"
 >
-👁 ดูสินค้า
+👁️ ดูสินค้า
 </a>
 
 
@@ -569,7 +591,7 @@ if ($status === 'approved') {
     class="btn btn-outline-danger w-100"
     onclick="return confirm('ต้องการลบสินค้านี้หรือไม่?');"
 >
-🗑 ลบสินค้า
+🗑️ ลบสินค้า
 </a>
 
 
@@ -613,3 +635,4 @@ if ($status === 'approved') {
 </body>
 
 </html>
+```
