@@ -1,18 +1,18 @@
 <?php
 
 /* =====================================================
-   DATABASE
+   DATABASE - RAILWAY
 ===================================================== */
 
-$host = "localhost";
-$db   = "secondhand_shop";
-$user = "root";
-$pass = "";
+$host = getenv('MYSQLHOST');
+$db   = getenv('MYSQLDATABASE');
+$user = getenv('MYSQLUSER');
+$pass = getenv('MYSQLPASSWORD');
+$port = getenv('MYSQLPORT');
 
 
 /* =====================================================
    ชื่อเว็บไซต์
-   เปลี่ยนตรงนี้จุดเดียวได้ทั้งเว็บ
 ===================================================== */
 
 define('SITE_NAME', 'PD SHOP');
@@ -26,7 +26,8 @@ $conn = new mysqli(
     $host,
     $user,
     $pass,
-    $db
+    $db,
+    $port
 );
 
 
