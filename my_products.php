@@ -8,6 +8,7 @@ if (!isset($_SESSION['user'])) {
 
 $user_id = (int)$_SESSION['user']['id'];
 
+
 /* =====================================================
    ลบสินค้า
 ===================================================== */
@@ -43,8 +44,8 @@ if (isset($_GET['delete'])) {
 
 /* =====================================================
    ดึงสินค้าของเรา
-   เห็นทั้ง:
-   ขายอยู่ / ขายแล้ว / รอตรวจสอบ / ไม่อนุมัติ
+   ใช้ seller_id
+   เห็นทั้ง ขายอยู่ / ขายแล้ว / รอตรวจสอบ / ไม่อนุมัติ
 ===================================================== */
 
 $stmt = $conn->prepare("
@@ -73,7 +74,7 @@ $products = $stmt->get_result();
 
 
 /* =====================================================
-   สถิติสินค้า
+   สถิติ
 ===================================================== */
 
 $total_products = 0;
@@ -135,9 +136,7 @@ $pending_products =
     content="width=device-width, initial-scale=1"
 >
 
-<title>
-สินค้าของฉัน - PD Shop
-</title>
+<title>สินค้าของฉัน - PD Shop</title>
 
 <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
@@ -160,6 +159,7 @@ body {
     width: 100%;
     height: 220px;
     object-fit: cover;
+    background: #f1f3f5;
 }
 
 .stat-card {
@@ -175,10 +175,6 @@ body {
 
 .status-badge {
     font-size: 13px;
-}
-
-.navbar-brand {
-    font-size: 22px;
 }
 
 </style>
@@ -201,7 +197,7 @@ body {
     href="index.php"
     class="navbar-brand fw-bold text-dark text-decoration-none"
 >
-🛒 PD Shop
+    🛒 PD Shop
 </a>
 
 
@@ -211,7 +207,7 @@ body {
     href="messages.php"
     class="btn btn-outline-dark"
 >
-💬 ข้อความ
+    💬 ข้อความ
 </a>
 
 
@@ -219,7 +215,7 @@ body {
     href="my_orders.php"
     class="btn btn-outline-dark"
 >
-📦 ออเดอร์ของฉัน
+    📦 ออเดอร์ของฉัน
 </a>
 
 
@@ -227,7 +223,7 @@ body {
     href="favorites.php"
     class="btn btn-outline-danger"
 >
-❤️ สินค้าที่ถูกใจ
+    ❤️ สินค้าที่ถูกใจ
 </a>
 
 
@@ -235,7 +231,7 @@ body {
     href="seller_orders.php"
     class="btn btn-outline-dark"
 >
-🏪 ออเดอร์ที่ได้รับ
+    🏪 ออเดอร์ที่ได้รับ
 </a>
 
 
@@ -243,7 +239,7 @@ body {
     href="my_products.php"
     class="btn btn-dark"
 >
-📦 สินค้าของฉัน
+    📦 สินค้าของฉัน
 </a>
 
 
@@ -251,7 +247,7 @@ body {
     href="sell.php"
     class="btn btn-outline-dark"
 >
-➕ ลงขายสินค้า
+    ➕ ลงขายสินค้า
 </a>
 
 
@@ -259,7 +255,7 @@ body {
     href="profile.php"
     class="btn btn-outline-dark"
 >
-👤 <?= htmlspecialchars($_SESSION['user']['name']) ?>
+    👤 <?= htmlspecialchars($_SESSION['user']['name']) ?>
 </a>
 
 
@@ -267,7 +263,7 @@ body {
     href="logout.php"
     class="btn btn-dark"
 >
-🚪 ออกจากระบบ
+    ออกจากระบบ
 </a>
 
 </div>
@@ -292,11 +288,11 @@ body {
 <div>
 
 <h2 class="fw-bold mb-1">
-📦 สินค้าของฉัน
+    📦 สินค้าของฉัน
 </h2>
 
 <p class="text-secondary mb-0">
-จัดการสินค้าที่คุณลงขายทั้งหมด
+    จัดการสินค้าที่คุณลงขายทั้งหมด
 </p>
 
 </div>
@@ -306,7 +302,7 @@ body {
     href="sell.php"
     class="btn btn-dark"
 >
-➕ ลงขายสินค้า
+    ➕ ลงขายสินค้า
 </a>
 
 </div>
@@ -320,16 +316,18 @@ body {
 <div class="row g-3 mb-4">
 
 
+<!-- ทั้งหมด -->
+
 <div class="col-md-3">
 
 <div class="card stat-card shadow-sm p-4">
 
 <small class="text-secondary">
-สินค้าทั้งหมด
+    สินค้าทั้งหมด
 </small>
 
 <h2 class="fw-bold mb-0">
-<?= $total_products ?>
+    <?= $total_products ?>
 </h2>
 
 </div>
@@ -337,16 +335,18 @@ body {
 </div>
 
 
+<!-- กำลังขาย -->
+
 <div class="col-md-3">
 
 <div class="card stat-card shadow-sm p-4">
 
 <small class="text-secondary">
-กำลังขาย
+    กำลังขาย
 </small>
 
 <h2 class="fw-bold text-success mb-0">
-<?= $approved_products ?>
+    <?= $approved_products ?>
 </h2>
 
 </div>
@@ -354,39 +354,42 @@ body {
 </div>
 
 
+<!-- ขายแล้ว -->
+
 <div class="col-md-3">
 
 <div class="card stat-card shadow-sm p-4">
 
 <small class="text-secondary">
-ขายแล้ว
+    ขายแล้ว
 </small>
 
 <h2 class="fw-bold text-danger mb-0">
-<?= $sold_products ?>
+    <?= $sold_products ?>
 </h2>
 
 </div>
 
 </div>
 
+
+<!-- รอตรวจสอบ -->
 
 <div class="col-md-3">
 
 <div class="card stat-card shadow-sm p-4">
 
 <small class="text-secondary">
-รอตรวจสอบ
+    รอตรวจสอบ
 </small>
 
 <h2 class="fw-bold text-warning mb-0">
-<?= $pending_products ?>
+    <?= $pending_products ?>
 </h2>
 
 </div>
 
 </div>
-
 
 </div>
 
@@ -398,25 +401,26 @@ body {
 
 <?php if ($products->num_rows === 0): ?>
 
+
 <div class="card shadow-sm p-5 text-center">
 
 <div style="font-size:70px">
-📦
+    📦
 </div>
 
 <h4 class="mt-3">
-ยังไม่มีสินค้า
+    ยังไม่มีสินค้า
 </h4>
 
 <p class="text-secondary">
-คุณยังไม่ได้ลงขายสินค้า
+    คุณยังไม่ได้ลงขายสินค้า
 </p>
 
 <a
     href="sell.php"
     class="btn btn-dark"
 >
-➕ ลงขายสินค้า
+    ➕ ลงขายสินค้า
 </a>
 
 </div>
@@ -433,6 +437,7 @@ body {
 
 <div class="col-md-4">
 
+
 <div class="card shadow-sm h-100">
 
 
@@ -446,7 +451,15 @@ body {
     src="<?= htmlspecialchars($p['image']) ?>"
     class="product-img"
     alt="<?= htmlspecialchars($p['name']) ?>"
+    onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
 >
+
+<div
+    class="product-img align-items-center justify-content-center"
+    style="font-size:70px;display:none;"
+>
+    📦
+</div>
 
 <?php else: ?>
 
@@ -454,7 +467,7 @@ body {
     class="product-img d-flex align-items-center justify-content-center bg-secondary-subtle"
     style="font-size:70px"
 >
-📦
+    📦
 </div>
 
 <?php endif; ?>
@@ -563,13 +576,13 @@ if ($status === 'approved') {
 
 <!-- =================================================
      BUTTONS
-===================================================== -->
+================================================= -->
 
 <a
     href="product.php?id=<?= (int)$p['id'] ?>"
     class="btn btn-outline-dark w-100 mb-2"
 >
-👁️ ดูสินค้า
+    👁 ดูสินค้า
 </a>
 
 
@@ -579,7 +592,7 @@ if ($status === 'approved') {
     href="edit_product.php?id=<?= (int)$p['id'] ?>"
     class="btn btn-dark w-100 mb-2"
 >
-✏️ แก้ไขสินค้า
+    ✏️ แก้ไขสินค้า
 </a>
 
 <?php endif; ?>
@@ -590,7 +603,7 @@ if ($status === 'approved') {
     class="btn btn-outline-danger w-100"
     onclick="return confirm('ต้องการลบสินค้านี้หรือไม่?');"
 >
-🗑️ ลบสินค้า
+    🗑 ลบสินค้า
 </a>
 
 
@@ -625,7 +638,7 @@ if ($status === 'approved') {
 <br>
 
 <small>
-เว็บไซต์ซื้อ–ขายสินค้ามือสอง
+    เว็บไซต์ซื้อ–ขายสินค้ามือสอง
 </small>
 
 </footer>
@@ -634,4 +647,3 @@ if ($status === 'approved') {
 </body>
 
 </html>
-```
