@@ -1,1317 +1,192 @@
-<?php
-
-require_once __DIR__ . '/config.php';
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!isset($_SESSION['user']['id'])) {
-    header("Location: login.php");
-    exit;
-}
-
-$user_id = (int)$_SESSION['user']['id'];
-
-$order_id = (int)(
-    $_GET['id']
-    ?? $_POST['order_id']
-    ?? 0
-);
-
-if ($order_id <= 0) {
-    die("ไม่พบออเดอร์");
-}
-
-
+```php
 /* =========================================================
-   ตรวจสอบว่าออเดอร์เป็นของผู้ขาย
-   ใช้ seller_id จาก orders โดยตรง
-========================================================= */
+   PAYMENT SLIP
+   ========================================================= */
 
-function checkSellerOrder($conn, $order_id, $user_id)
-{
-    $sql = "
-        SELECT id
-        FROM orders
-        WHERE id = ?
-        AND seller_id = ?
-        LIMIT 1
-    ";
-
-    $stmt = $conn->prepare($sql);
-
-    if (!$stmt) {
-        die("เกิดข้อผิดพลาด SQL: " . htmlspecialchars($conn->error));
-    }
-
-    $stmt->bind_param("ii", $order_id, $user_id);
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-    $order = $result->fetch_assoc();
-
-    $stmt->close();
-
-    return $order;
-}
-
-
-/* =========================================================
-   จัดการ POST
-========================================================= */
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-
-    $action = $_POST['action'];
-
-    /* ตรวจสอบสิทธิ์ผู้ขาย */
-
-    $check = checkSellerOrder(
-        $conn,
-        $order_id,
-        $user_id
-    );
-
-    if (!$check) {
-        die("คุณไม่มีสิทธิ์จัดการออเดอร์นี้");
-    }
-
-
-    /* =====================================================
-       อัปเดตสถานะ + บริษัทขนส่ง + เลขพัสดุ
-    ===================================================== */
-
-    if ($action === 'update_order') {
-
-        $status = trim(
-            $_POST['status'] ?? 'pending'
-        );
-
-        $shipping_company = trim(
-            $_POST['shipping_company'] ?? ''
-        );
-
-        $tracking_number = trim(
-            $_POST['tracking_number'] ?? ''
-        );
-
-
-        $allowed_status = [
-            'pending',
-            'paid',
-            'shipping',
-            'completed',
-            'cancelled'
-        ];
-
-
-        if (!in_array($status, $allowed_status, true)) {
-            $status = 'pending';
-        }
-
-
-        $sql = "
-            UPDATE orders
-            SET
-                status = ?,
-                shipping_company = ?,
-                tracking_number = ?
-            WHERE id = ?
-            AND seller_id = ?
-        ";
-
-
-        $stmt = $conn->prepare($sql);
-
-        if (!$stmt) {
-            die(
-                "เกิดข้อผิดพลาด SQL: "
-                . htmlspecialchars($conn->error)
-            );
-        }
-
-
-        $stmt->bind_param(
-            "sssii",
-            $status,
-            $shipping_company,
-            $tracking_number,
-            $order_id,
-            $user_id
-        );
-
-
-        $stmt->execute();
-        $stmt->close();
-
-
-        header(
-            "Location: order_detail.php?id="
-            . $order_id
-            . "&updated=1"
-        );
-
-        exit;
-    }
-
-
-    /* =====================================================
-       ตรวจสอบสลิป
-       เปลี่ยนสถานะเป็น paid
-    ===================================================== */
-
-    if ($action === 'verify_payment') {
-
-        $sql = "
-            UPDATE orders
-            SET status = 'paid'
-            WHERE id = ?
-            AND seller_id = ?
-        ";
-
-
-        $stmt = $conn->prepare($sql);
-
-        if (!$stmt) {
-            die(
-                "เกิดข้อผิดพลาด SQL: "
-                . htmlspecialchars($conn->error)
-            );
-        }
-
-
-        $stmt->bind_param(
-            "ii",
-            $order_id,
-            $user_id
-        );
-
-
-        $stmt->execute();
-        $stmt->close();
-
-
-        header(
-            "Location: order_detail.php?id="
-            . $order_id
-            . "&verified=1"
-        );
-
-        exit;
-    }
-}
-
-
-/* =========================================================
-   ดึงข้อมูลออเดอร์
-========================================================= */
-
-$sql = "
-
-    SELECT
-        o.*,
-
-        p.name AS product_name,
-        p.image AS product_image,
-        p.description AS product_description,
-
-        u.name AS buyer_username
-
-    FROM orders o
-
-    INNER JOIN products p
-        ON o.product_id = p.id
-
-    LEFT JOIN users u
-        ON o.buyer_id = u.id
-
-    WHERE
-        o.id = ?
-        AND o.seller_id = ?
-
-    LIMIT 1
-";
-
-
-$stmt = $conn->prepare($sql);
-
-if (!$stmt) {
-    die(
-        "เกิดข้อผิดพลาด SQL: "
-        . htmlspecialchars($conn->error)
-    );
-}
-
-
-$stmt->bind_param(
-    "ii",
-    $order_id,
-    $user_id
-);
-
-
-$stmt->execute();
-
-$result = $stmt->get_result();
-
-$order = $result->fetch_assoc();
-
-$stmt->close();
-
-
-if (!$order) {
-
-    die("
-        <div style='
-            font-family:Arial,Tahoma;
-            text-align:center;
-            padding:60px;
-        '>
-
-            <h2>❌ ไม่พบออเดอร์</h2>
-
-            <p>
-                ออเดอร์นี้ไม่มีอยู่
-                หรือไม่ใช่ออเดอร์ของร้านคุณ
-            </p>
-
-            <br>
-
-            <a href='seller_orders.php'>
-                ← กลับไปออเดอร์ที่ได้รับ
-            </a>
-
-        </div>
-    ");
-}
-
-
-/* =========================================================
-   STATUS
-========================================================= */
-
-$status = trim(
-    $order['status'] ?? 'pending'
-);
-
-
-$status_text = 'รอตรวจสอบ';
-$status_class = 'pending';
-
-
-switch ($status) {
-
-    case 'paid':
-        $status_text = 'ชำระเงินแล้ว';
-        $status_class = 'paid';
-        break;
-
-    case 'shipping':
-        $status_text = 'กำลังจัดส่ง';
-        $status_class = 'shipping';
-        break;
-
-    case 'completed':
-        $status_text = 'สำเร็จ';
-        $status_class = 'completed';
-        break;
-
-    case 'cancelled':
-        $status_text = 'ยกเลิก';
-        $status_class = 'cancelled';
-        break;
-
-    case 'pending':
-    default:
-        $status_text = 'รอตรวจสอบ';
-        $status_class = 'pending';
-        break;
-}
-
-
-/* =========================================================
-   PRODUCT IMAGE
-========================================================= */
-
-$product_image = trim(
-    $order['product_image'] ?? ''
-);
-
-$product_url = '';
-
-if ($product_image !== '') {
-
-    $product_image = str_replace('\\', '/', $product_image);
-    $product_image = ltrim($product_image, '/');
-
-    if (strpos($product_image, 'http://') === 0 ||
-        strpos($product_image, 'https://') === 0) {
-
-        $product_url = $product_image;
-
-    } elseif (strpos($product_image, 'uploads/') === 0) {
-
-        $product_url = $product_image;
-
-    } else {
-
-        $product_url = 'uploads/' . $product_image;
-    }
-}
-
-
-/* =========================================================
-   SLIP IMAGE
-   รองรับหลายรูปแบบของ path
-========================================================= */
-
-$slip = trim(
-    $order['payment_slip'] ?? ''
-);
+$slip = trim($order['payment_slip'] ?? '');
 
 $slip_url = '';
 $slip_exists = false;
 
-$slip_path = '';
-
 if ($slip !== '') {
 
+    // แปลง \ เป็น /
     $slip = str_replace('\\', '/', $slip);
+
+    // ตัด / ด้านหน้า
     $slip = ltrim($slip, '/');
 
+    /*
+     * ฐานข้อมูลของคุณเก็บแบบ:
+     * uploads/slip_order_4_1788125181.webp
+     *
+     * ดังนั้นใช้ path นี้ตรง ๆ
+     */
+
+    if (strpos($slip, 'uploads/') === 0) {
+
+        $slip_url = $slip;
+
+    } else {
+
+        $slip_url = 'uploads/' . $slip;
+
+    }
 
     /*
-       กรณีฐานข้อมูลเก็บเป็น:
-       uploads/slip_order_x.webp
-    */
+     * ตรวจสอบไฟล์จริงใน Railway
+     *
+     * __DIR__ คือ /var/www/html
+     *
+     * ดังนั้นจะตรวจ:
+     * /var/www/html/uploads/ชื่อไฟล์
+     */
 
-    $possible_paths = [
+    $full_slip_path = __DIR__ . '/' . $slip_url;
 
-        __DIR__ . '/' . $slip,
+    if (file_exists($full_slip_path)) {
 
-        __DIR__ . '/uploads/' . basename($slip),
+        $slip_exists = true;
 
-        __DIR__ . '/uploads/payment_slips/' . basename($slip),
-
-        __DIR__ . '/payment_slips/' . basename($slip)
-
-    ];
-
-
-    foreach ($possible_paths as $path) {
-
-        if (file_exists($path)) {
-
-            $slip_path = $path;
-            $slip_exists = true;
-
-            break;
-        }
     }
 
-
-    /*
-       สร้าง URL ให้ตรงกับตำแหน่งจริง
-    */
-
-    if ($slip_exists) {
-
-        if (
-            strpos($slip, 'uploads/') === 0
-        ) {
-
-            $slip_url = $slip;
-
-        } elseif (
-            strpos($slip, 'payment_slips/') === 0
-        ) {
-
-            $slip_url =
-                'uploads/' . $slip;
-
-        } else {
-
-            /*
-              ถ้า DB เก็บแค่ชื่อไฟล์
-            */
-
-            $filename = basename($slip);
-
-            if (
-                file_exists(
-                    __DIR__ .
-                    '/uploads/' .
-                    $filename
-                )
-            ) {
-
-                $slip_url =
-                    'uploads/' .
-                    $filename;
-
-            } else {
-
-                $slip_url =
-                    'uploads/payment_slips/' .
-                    $filename;
-            }
-        }
-    }
 }
-
-
-/* =========================================================
-   ราคา
-   ใช้ total_price เพราะ orders ไม่มี price
-========================================================= */
-
-$total_price = (float)(
-    $order['total_price'] ?? 0
-);
-
-?>
-
-<!DOCTYPE html>
-
-<html lang="th">
-
-<head>
-
-<meta charset="UTF-8">
-
-<meta
-name="viewport"
-content="width=device-width, initial-scale=1.0"
-
->
-
-<title>
-รายละเอียดออเดอร์ #<?= (int)$order['id'] ?>
-</title>
-
-<style>
-
-* {
-    box-sizing:border-box;
-    font-family:Arial,Tahoma,sans-serif;
-}
-
-body {
-    margin:0;
-    background:#f5f6fa;
-    color:#333;
-}
-
-.navbar {
-    height:65px;
-    background:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:0 30px;
-    box-shadow:0 2px 10px rgba(0,0,0,.08);
-}
-
-.logo {
-    color:#ff6b35;
-    font-size:22px;
-    font-weight:bold;
-    text-decoration:none;
-}
-
-.navbar a {
-    text-decoration:none;
-    color:#555;
-    margin-left:15px;
-}
-
-.container {
-    max-width:900px;
-    margin:30px auto;
-    padding:0 20px;
-}
-
-.back {
-    display:inline-block;
-    margin-bottom:20px;
-    color:#ff6b35;
-    text-decoration:none;
-    font-weight:bold;
-}
-
-.card {
-    background:#fff;
-    padding:25px;
-    margin-bottom:20px;
-    border-radius:15px;
-    box-shadow:0 3px 15px rgba(0,0,0,.06);
-}
-
-.header {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    border-bottom:1px solid #eee;
-    padding-bottom:15px;
-    margin-bottom:20px;
-}
-
-.header h1 {
-    margin:0;
-    font-size:24px;
-}
-
-.status {
-    padding:8px 15px;
-    border-radius:20px;
-    font-size:14px;
-    font-weight:bold;
-}
-
-.pending {
-    background:#fff3cd;
-    color:#856404;
-}
-
-.paid {
-    background:#d1ecf1;
-    color:#0c5460;
-}
-
-.shipping {
-    background:#cfe2ff;
-    color:#084298;
-}
-
-.completed {
-    background:#d1e7dd;
-    color:#0f5132;
-}
-
-.cancelled {
-    background:#f8d7da;
-    color:#842029;
-}
-
-.product {
-    display:flex;
-    align-items:center;
-    gap:20px;
-}
-
-.product-image {
-    width:150px;
-    height:150px;
-    object-fit:cover;
-    border-radius:12px;
-    background:#eee;
-}
-
-.no-image {
-    width:150px;
-    height:150px;
-    background:#eee;
-    border-radius:12px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:50px;
-}
-
-.product-name {
-    font-size:22px;
-    font-weight:bold;
-    margin-bottom:10px;
-}
-
-.price {
-    color:#ff6b35;
-    font-size:25px;
-    font-weight:bold;
-}
-
-.customer {
-    background:#fff8f4;
-    border:1px solid #ffe1d5;
-}
-
-.customer h2 {
-    color:#ff6b35;
-}
-
-.customer p {
-    margin:8px 0;
-}
-
-.shipping-box {
-    background:#f4f8ff;
-    border:1px solid #dce9ff;
-}
-
-.shipping-box h2 {
-    color:#2563eb;
-}
-
-.edit-box {
-    background:#f8f9fa;
-    padding:20px;
-    border-radius:12px;
-}
-
-.form-group {
-    margin-bottom:16px;
-}
-
-.form-group label {
-    display:block;
-    font-weight:bold;
-    margin-bottom:7px;
-}
-
-.form-group input,
-.form-group select {
-    width:100%;
-    padding:12px;
-    border:1px solid #ddd;
-    border-radius:8px;
-    font-size:15px;
-    background:#fff;
-}
-
-.save-button {
-    width:100%;
-    border:none;
-    background:#ff6b35;
-    color:#fff;
-    padding:13px;
-    border-radius:9px;
-    font-size:16px;
-    font-weight:bold;
-    cursor:pointer;
-}
-
-.slip-box {
-    text-align:center;
-}
-
-.slip-image {
-    display:block;
-    max-width:100%;
-    max-height:700px;
-    margin:20px auto;
-    border-radius:12px;
-    border:1px solid #ddd;
-    box-shadow:0 3px 15px rgba(0,0,0,.1);
-}
-
-.open-slip {
-    display:inline-block;
-    background:#ff6b35;
-    color:#fff;
-    padding:10px 18px;
-    border-radius:8px;
-    text-decoration:none;
-    font-weight:bold;
-}
-
-.verify-button {
-    width:100%;
-    margin-top:15px;
-    border:none;
-    background:#198754;
-    color:white;
-    padding:14px;
-    border-radius:9px;
-    font-size:16px;
-    font-weight:bold;
-    cursor:pointer;
-}
-
-.warning {
-    background:#fff3cd;
-    color:#856404;
-    padding:15px;
-    border-radius:10px;
-    text-align:left;
-}
-
-.success {
-    background:#d1e7dd;
-    color:#0f5132;
-    padding:15px;
-    border-radius:10px;
-    margin-bottom:20px;
-    font-weight:bold;
-}
-
-.info {
-    background:#f8f9fa;
-    padding:15px;
-    border-radius:10px;
-}
-
-@media(max-width:700px) {
-
-    .navbar {
-        padding:0 15px;
-    }
-
-    .product {
-        flex-direction:column;
-        align-items:flex-start;
-    }
-
-    .header {
-        flex-direction:column;
-        align-items:flex-start;
-        gap:10px;
-    }
-}
-
-</style>
-
-</head>
-
-<body>
-
-<nav class="navbar">
-
-```
-<a href="index.php" class="logo">
-    PD Shop
-</a>
-
-<div>
-
-    <a href="seller_orders.php">
-        📦 ออเดอร์
-    </a>
-
-    <a href="index.php">
-        🏠 หน้าหลัก
-    </a>
-
-</div>
 ```
 
-</nav>
+แล้วส่วนแสดงสลิปใน HTML ให้ใช้ชุดนี้แทนของเดิม:
 
-<div class="container">
-
-<a
-href="seller_orders.php"
-class="back"
-
->
-
-```
-← กลับไปออเดอร์ที่ได้รับ
-```
-
-</a>
-
-<?php if (isset($_GET['verified'])): ?>
-
-<div class="success">
-    ✅ ตรวจสอบสลิปและยืนยันการชำระเงินเรียบร้อยแล้ว
-</div>
-
-<?php endif; ?>
-
-<?php if (isset($_GET['updated'])): ?>
-
-<div class="success">
-    ✅ บันทึกสถานะและข้อมูลการจัดส่งเรียบร้อยแล้ว
-</div>
-
-<?php endif; ?>
-
+```php
 <!-- =====================================================
-     ORDER
-===================================================== -->
-
-<div class="card">
-
-```
-<div class="header">
-
-    <h1>
-        📦 ออเดอร์ #<?= (int)$order['id'] ?>
-    </h1>
-
-    <span class="status <?= htmlspecialchars($status_class) ?>">
-
-        <?= htmlspecialchars($status_text) ?>
-
-    </span>
-
-</div>
-
-
-<div class="product">
-
-
-    <?php if ($product_url !== ''): ?>
-
-        <img
-            src="<?= htmlspecialchars($product_url) ?>"
-            class="product-image"
-            alt="สินค้า"
-            onerror="this.style.display='none';"
-        >
-
-    <?php else: ?>
-
-        <div class="no-image">
-            📦
-        </div>
-
-    <?php endif; ?>
-
-
-    <div>
-
-        <div class="product-name">
-
-            <?= htmlspecialchars(
-                $order['product_name'] ?? 'ไม่พบชื่อสินค้า'
-            ) ?>
-
-        </div>
-
-
-        <div>
-
-            รหัสสินค้า:
-            #<?= (int)$order['product_id'] ?>
-
-        </div>
-
-
-        <br>
-
-
-        <div class="price">
-
-            ฿<?= number_format(
-                $total_price,
-                2
-            ) ?>
-
-        </div>
-
-    </div>
-
-</div>
-```
-
-</div>
-
-<!-- =====================================================
-     จัดการออเดอร์
-===================================================== -->
-
-<div class="card">
-
-```
-<h2>
-    ✏️ จัดการออเดอร์
-</h2>
-
-<br>
-
-<div class="edit-box">
-
-    <form
-        method="POST"
-        action="order_detail.php?id=<?= (int)$order['id'] ?>"
-    >
-
-        <input
-            type="hidden"
-            name="order_id"
-            value="<?= (int)$order['id'] ?>"
-        >
-
-        <input
-            type="hidden"
-            name="action"
-            value="update_order"
-        >
-
-
-        <div class="form-group">
-
-            <label>
-                🔄 สถานะออเดอร์
-            </label>
-
-            <select name="status">
-
-                <option
-                    value="pending"
-                    <?= $status === 'pending'
-                        ? 'selected'
-                        : ''
-                    ?>
-                >
-                    รอตรวจสอบ
-                </option>
-
-                <option
-                    value="paid"
-                    <?= $status === 'paid'
-                        ? 'selected'
-                        : ''
-                    ?>
-                >
-                    ชำระเงินแล้ว
-                </option>
-
-                <option
-                    value="shipping"
-                    <?= $status === 'shipping'
-                        ? 'selected'
-                        : ''
-                    ?>
-                >
-                    กำลังจัดส่ง
-                </option>
-
-                <option
-                    value="completed"
-                    <?= $status === 'completed'
-                        ? 'selected'
-                        : ''
-                    ?>
-                >
-                    สำเร็จ
-                </option>
-
-                <option
-                    value="cancelled"
-                    <?= $status === 'cancelled'
-                        ? 'selected'
-                        : ''
-                    ?>
-                >
-                    ยกเลิก
-                </option>
-
-            </select>
-
-        </div>
-
-
-        <div class="form-group">
-
-            <label>
-                🚚 บริษัทขนส่ง
-            </label>
-
-            <input
-                type="text"
-                name="shipping_company"
-                value="<?= htmlspecialchars(
-                    $order['shipping_company'] ?? ''
-                ) ?>"
-                placeholder="เช่น Flash Express"
-            >
-
-        </div>
-
-
-        <div class="form-group">
-
-            <label>
-                📦 เลขพัสดุ
-            </label>
-
-            <input
-                type="text"
-                name="tracking_number"
-                value="<?= htmlspecialchars(
-                    $order['tracking_number'] ?? ''
-                ) ?>"
-                placeholder="กรอกเลขพัสดุ"
-            >
-
-        </div>
-
-
-        <button
-            type="submit"
-            class="save-button"
-            onclick="
-                return confirm(
-                    'ยืนยันการบันทึกข้อมูลออเดอร์?'
-                );
-            "
-        >
-
-            💾 บันทึกข้อมูลออเดอร์
-
-        </button>
-
-    </form>
-
-</div>
-```
-
-</div>
-
-<!-- =====================================================
-     CUSTOMER
-===================================================== -->
-
-<div class="card customer">
-
-```
-<h2>
-    👤 ข้อมูลผู้ซื้อ
-</h2>
-
-<br>
-
-
-<p>
-
-    <strong>
-        ชื่อ:
-    </strong>
-
-    <?= htmlspecialchars(
-        $order['buyer_name'] ?? 
-        $order['buyer_username'] ??
-        'ไม่ระบุ'
-    ) ?>
-
-</p>
-
-
-<p>
-
-    <strong>
-        เบอร์โทร:
-    </strong>
-
-    <?= htmlspecialchars(
-        $order['phone'] ?? ''
-    ) ?>
-
-</p>
-
-
-<p>
-
-    <strong>
-        ที่อยู่:
-    </strong>
-
-    <?= nl2br(
-        htmlspecialchars(
-            $order['address'] ?? ''
-        )
-    ) ?>
-
-</p>
-```
-
-</div>
-
-<!-- =====================================================
-     SHIPPING
-===================================================== -->
-
-<div class="card shipping-box">
-
-```
-<h2>
-    🚚 ข้อมูลการจัดส่ง
-</h2>
-
-<br>
-
-
-<p>
-
-    <strong>
-        บริษัทขนส่ง:
-    </strong>
-
-    <?= !empty($order['shipping_company'])
-        ? htmlspecialchars(
-            $order['shipping_company']
-        )
-        : 'ยังไม่ได้ระบุ'
-    ?>
-
-</p>
-
-
-<p>
-
-    <strong>
-        เลขพัสดุ:
-    </strong>
-
-    <?= !empty($order['tracking_number'])
-        ? htmlspecialchars(
-            $order['tracking_number']
-        )
-        : 'ยังไม่ได้ระบุ'
-    ?>
-
-</p>
-```
-
-</div>
-
-<!-- =====================================================
-     SLIP
+     PAYMENT SLIP
 ===================================================== -->
 
 <div class="card slip-box">
 
-```
-<h2>
-    💳 หลักฐานการชำระเงิน
-</h2>
+    <h2>
+        💳 หลักฐานการชำระเงิน
+    </h2>
 
+    <?php if ($slip !== '' && $slip_exists): ?>
 
-<?php if ($slip !== '' && $slip_exists): ?>
-
-
-    <img
-        src="<?= htmlspecialchars($slip_url) ?>"
-        class="slip-image"
-        alt="สลิปการโอนเงิน"
-    >
-
-
-    <a
-        href="<?= htmlspecialchars($slip_url) ?>"
-        target="_blank"
-        class="open-slip"
-    >
-        🔍 เปิดรูปสลิปขนาดเต็ม
-    </a>
-
-
-    <?php if ($status === 'paid'): ?>
-
-        <div
-            class="success"
-            style="margin-top:20px;"
+        <a
+            href="<?= htmlspecialchars($slip_url) ?>"
+            target="_blank"
         >
-            ✅ ตรวจสอบการชำระเงินแล้ว
+
+            <img
+                src="<?= htmlspecialchars($slip_url) ?>"
+                class="slip-image"
+                alt="สลิปการชำระเงิน"
+            >
+
+        </a>
+
+        <br>
+
+        <a
+            href="<?= htmlspecialchars($slip_url) ?>"
+            target="_blank"
+            class="open-slip"
+        >
+            🔍 เปิดรูปขนาดเต็ม
+        </a>
+
+
+        <?php if ($payment_status === 'paid'): ?>
+
+            <div class="payment-status payment-paid">
+
+                ✅ ตรวจสอบการชำระเงินเสร็จแล้ว
+
+            </div>
+
+        <?php else: ?>
+
+            <div class="payment-status payment-pending">
+
+                ⏳ รอตรวจสอบสลิป
+
+            </div>
+
+
+            <form
+                method="POST"
+                action="order_detail.php?id=<?= (int)$order['id'] ?>"
+            >
+
+                <input
+                    type="hidden"
+                    name="order_id"
+                    value="<?= (int)$order['id'] ?>"
+                >
+
+                <input
+                    type="hidden"
+                    name="action"
+                    value="verify_payment"
+                >
+
+                <button
+                    type="submit"
+                    class="verify-button"
+                    onclick="return confirm(
+                        'ตรวจสอบสลิปเรียบร้อยแล้ว และได้รับเงินถูกต้องใช่หรือไม่?'
+                    );"
+                >
+
+                    ✅ ตรวจสอบเสร็จแล้ว
+
+                </button>
+
+            </form>
+
+        <?php endif; ?>
+
+
+    <?php elseif ($slip !== ''): ?>
+
+        <div class="warning">
+
+            ❌ พบชื่อไฟล์สลิปในฐานข้อมูล
+            แต่ไม่พบไฟล์รูปในเซิร์ฟเวอร์
+
+            <br><br>
+
+            <strong>
+                ชื่อไฟล์:
+            </strong>
+
+            <?= htmlspecialchars($slip) ?>
+
+            <br><br>
+
+            <strong>
+                ระบบตรวจสอบ:
+            </strong>
+
+            <br>
+
+            <?= htmlspecialchars(
+                __DIR__ . '/' . $slip_url
+            ) ?>
+
+            <br><br>
+
+            ⚠️ ถ้ายังขึ้นข้อความนี้ แสดงว่าไฟล์สลิป
+            ไม่ได้ถูกเก็บอยู่ใน Railway จริง
+            หรือไฟล์ถูกลบหลังจาก Deploy ใหม่
+
         </div>
 
     <?php else: ?>
 
-        <div
-            class="warning"
-            style="margin-top:20px;"
-        >
-            ⏳ กรุณาตรวจสอบสลิปก่อนยืนยันการชำระเงิน
+        <div class="warning">
+
+            ⚠️ ออเดอร์นี้ยังไม่มีหลักฐานการชำระเงิน
+
         </div>
-
-
-        <form
-            method="POST"
-            action="order_detail.php?id=<?= (int)$order['id'] ?>"
-        >
-
-            <input
-                type="hidden"
-                name="order_id"
-                value="<?= (int)$order['id'] ?>"
-            >
-
-            <input
-                type="hidden"
-                name="action"
-                value="verify_payment"
-            >
-
-
-            <button
-                type="submit"
-                class="verify-button"
-                onclick="
-                    return confirm(
-                        'ตรวจสอบสลิปเรียบร้อยแล้ว และได้รับเงินถูกต้องใช่หรือไม่?'
-                    );
-                "
-            >
-
-                ✅ ตรวจสอบเสร็จแล้ว
-
-            </button>
-
-        </form>
 
     <?php endif; ?>
 
-
-<?php elseif ($slip !== ''): ?>
-
-
-    <div class="warning">
-
-        ❌ พบชื่อไฟล์สลิปในฐานข้อมูล
-        แต่ไม่พบไฟล์รูปในเซิร์ฟเวอร์
-
-        <br><br>
-
-        <strong>
-            ชื่อไฟล์:
-        </strong>
-
-        <?= htmlspecialchars($slip) ?>
-
-        <br><br>
-
-        ระบบตรวจสอบตำแหน่งต่อไปนี้แล้ว:
-
-        <br>
-
-        <code>
-            /uploads/
-        </code>
-
-        <br>
-
-        <code>
-            /uploads/payment_slips/
-        </code>
-
-        <br>
-
-        <code>
-            /payment_slips/
-        </code>
-
-    </div>
-
-
-<?php else: ?>
-
-
-    <div class="warning">
-
-        ⚠️ ออเดอร์นี้ยังไม่มีหลักฐานการชำระเงิน
-
-    </div>
-
-<?php endif; ?>
+</div>
 ```
-
-</div>
-
-</div>
-
-</body>
-
-</html>
