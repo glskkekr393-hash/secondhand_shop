@@ -1,3 +1,4 @@
+```php
 <?php
 
 require_once __DIR__ . '/config.php';
@@ -6,24 +7,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-
-/* =========================================================
-   LOGIN
-========================================================= */
-
 if (!isset($_SESSION['user']['id'])) {
     header("Location: login.php");
     exit;
 }
 
-$user_id = (int) $_SESSION['user']['id'];
+$user_id = (int)$_SESSION['user']['id'];
 
-
-/* =========================================================
-   ORDER ID
-========================================================= */
-
-$order_id = (int) (
+$order_id = (int)(
     $_GET['id']
     ?? $_POST['order_id']
     ?? 0
@@ -35,16 +26,16 @@ if ($order_id <= 0) {
 
 
 /* =========================================================
-   ตรวจสอบว่าเป็นออเดอร์ของผู้ขาย
+   ตรวจสอบว่าออเดอร์เป็นของผู้ขาย
 ========================================================= */
 
 function checkSellerOrder($conn, $order_id, $user_id)
 {
     $sql = "
-        SELECT id
-        FROM orders
-        WHERE id = ?
-        AND seller_id = ?
+        SELECT o.id
+        FROM orders o
+        WHERE o.id = ?
+        AND o.seller_id = ?
         LIMIT 1
     ";
 
@@ -76,21 +67,18 @@ function checkSellerOrder($conn, $order_id, $user_id)
 
 
 /* =========================================================
-   POST ACTION
+   จัดการ POST
 ========================================================= */
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST'
-    &&
-    isset($_POST['action'])
+    && isset($_POST['action'])
 ) {
 
     $action = $_POST['action'];
 
 
-    /* -----------------------------------------------------
-       ตรวจสอบสิทธิ์
-    ----------------------------------------------------- */
+    /* ตรวจสอบสิทธิ์ */
 
     $check = checkSellerOrder(
         $conn,
@@ -104,9 +92,8 @@ if (
 
 
     /* =====================================================
-       ยืนยันการชำระเงิน
-       ใช้ status = paid
-       ===================================================== */
+       ตรวจสอบการชำระเงิน
+    ===================================================== */
 
     if ($action === 'verify_payment') {
 
@@ -136,7 +123,6 @@ if (
 
         $stmt->close();
 
-
         header(
             "Location: order_detail.php?id=" .
             $order_id .
@@ -148,8 +134,8 @@ if (
 
 
     /* =====================================================
-       อัปเดตสถานะ + ขนส่ง + Tracking
-       ===================================================== */
+       อัปเดตสถานะ + บริษัทขนส่ง + Tracking
+    ===================================================== */
 
     if ($action === 'update_order') {
 
@@ -166,9 +152,7 @@ if (
         );
 
 
-        /* -------------------------------------------------
-           สถานะที่ฐานข้อมูล ENUM รองรับ
-        ------------------------------------------------- */
+        /* สถานะที่อนุญาต */
 
         $allowed_status = [
             'pending',
@@ -190,10 +174,6 @@ if (
         }
 
 
-        /* -------------------------------------------------
-           UPDATE
-        ------------------------------------------------- */
-
         $sql = "
             UPDATE orders
             SET
@@ -209,12 +189,10 @@ if (
         $stmt = $conn->prepare($sql);
 
         if (!$stmt) {
-
             die(
                 "เกิดข้อผิดพลาด SQL: " .
                 htmlspecialchars($conn->error)
             );
-
         }
 
 
@@ -250,15 +228,11 @@ if (
 
 $sql = "
     SELECT
-
         o.*,
 
         p.name AS product_name,
-
         p.image AS product_image,
-
         p.description AS product_description,
-
         p.item_condition AS product_condition
 
     FROM orders o
@@ -277,12 +251,10 @@ $sql = "
 $stmt = $conn->prepare($sql);
 
 if (!$stmt) {
-
     die(
         "เกิดข้อผิดพลาด SQL: " .
         htmlspecialchars($conn->error)
     );
-
 }
 
 
@@ -295,33 +267,23 @@ $stmt->bind_param(
 
 $stmt->execute();
 
-
 $result = $stmt->get_result();
 
-
 $order = $result->fetch_assoc();
-
 
 $stmt->close();
 
 
-/* =========================================================
-   ไม่พบออเดอร์
-========================================================= */
-
 if (!$order) {
 
     die("
-
         <div style='
-            font-family:Arial;
+            font-family:Arial,Tahoma,sans-serif;
             text-align:center;
             padding:60px;
         '>
 
-            <h2>
-                ❌ ไม่พบออเดอร์
-            </h2>
+            <h2>❌ ไม่พบออเดอร์</h2>
 
             <p>
                 ออเดอร์นี้ไม่มีอยู่
@@ -335,9 +297,7 @@ if (!$order) {
             </a>
 
         </div>
-
     ");
-
 }
 
 
@@ -353,34 +313,27 @@ $status = trim(
 $status_text = 'รอตรวจสอบ';
 
 
-if ($status === 'pending') {
+switch ($status) {
 
-    $status_text = 'รอตรวจสอบ';
+    case 'pending':
+        $status_text = 'รอตรวจสอบ';
+        break;
 
-}
+    case 'paid':
+        $status_text = 'ชำระเงินแล้ว';
+        break;
 
-elseif ($status === 'paid') {
+    case 'shipping':
+        $status_text = 'กำลังจัดส่ง';
+        break;
 
-    $status_text = 'ชำระเงินแล้ว';
+    case 'completed':
+        $status_text = 'สำเร็จ';
+        break;
 
-}
-
-elseif ($status === 'shipping') {
-
-    $status_text = 'กำลังจัดส่ง';
-
-}
-
-elseif ($status === 'completed') {
-
-    $status_text = 'สำเร็จ';
-
-}
-
-elseif ($status === 'cancelled') {
-
-    $status_text = 'ยกเลิก';
-
+    case 'cancelled':
+        $status_text = 'ยกเลิก';
+        break;
 }
 
 
@@ -396,19 +349,16 @@ if ($status === 'paid') {
     $status_class = 'paid';
 
 }
-
 elseif ($status === 'shipping') {
 
     $status_class = 'shipping';
 
 }
-
 elseif ($status === 'completed') {
 
     $status_class = 'completed';
 
 }
-
 elseif ($status === 'cancelled') {
 
     $status_class = 'cancelled';
@@ -424,8 +374,8 @@ $product_image = trim(
     $order['product_image'] ?? ''
 );
 
-
 $product_url = '';
+$product_exists = false;
 
 
 if ($product_image !== '') {
@@ -442,41 +392,85 @@ if ($product_image !== '') {
     );
 
 
+    $product_filename = basename(
+        $product_image
+    );
+
+
+    $possible_product_paths = [
+
+        __DIR__ . '/' . $product_image,
+
+        __DIR__ . '/uploads/' . $product_filename
+
+    ];
+
+
+    foreach (
+        $possible_product_paths
+        as $path
+    ) {
+
+        if (is_file($path)) {
+
+            $product_exists = true;
+
+
+            $product_url = str_replace(
+                '\\',
+                '/',
+                str_replace(
+                    __DIR__ . '/',
+                    '',
+                    $path
+                )
+            );
+
+            break;
+        }
+    }
+
+
+    /*
+     * ถ้าไฟล์มีอยู่ใน URL เดิม
+     * แต่ PHP ตรวจสอบไม่ได้
+     * ให้ใช้ path เดิม
+     */
+
     if (
-        strpos(
-            $product_image,
-            'http://'
-        ) === 0
-        ||
-        strpos(
-            $product_image,
-            'https://'
-        ) === 0
+        !$product_exists
+        &&
+        (
+            strpos(
+                $product_image,
+                'http://'
+            ) === 0
+
+            ||
+
+            strpos(
+                $product_image,
+                'https://'
+            ) === 0
+        )
     ) {
-
-        $product_url = $product_image;
-
-    }
-
-    elseif (
-        strpos(
-            $product_image,
-            'uploads/'
-        ) === 0
-    ) {
-
-        $product_url = $product_image;
-
-    }
-
-    else {
 
         $product_url =
-            'uploads/' .
             $product_image;
 
     }
 
+    elseif (
+        !$product_exists
+        &&
+        $product_url === ''
+    ) {
+
+        $product_url =
+            'uploads/' .
+            $product_filename;
+
+    }
 }
 
 
@@ -487,7 +481,6 @@ if ($product_image !== '') {
 $slip = trim(
     $order['payment_slip'] ?? ''
 );
-
 
 $slip_url = '';
 
@@ -508,14 +501,18 @@ if ($slip !== '') {
     );
 
 
-    /* URL เต็ม */
+    /*
+     * กรณีเป็น URL เต็ม
+     */
 
     if (
         strpos(
             $slip,
             'http://'
         ) === 0
+
         ||
+
         strpos(
             $slip,
             'https://'
@@ -524,112 +521,136 @@ if ($slip !== '') {
 
         $slip_url = $slip;
 
-        $slip_exists = true;
-
-    }
-
-
-    /* uploads/... */
-
-    elseif (
-        strpos(
-            $slip,
-            'uploads/'
-        ) === 0
-    ) {
-
-        $slip_url = $slip;
-
-        $full_slip_path =
-            __DIR__ .
-            '/' .
-            $slip_url;
-
-        if (
-            file_exists(
-                $full_slip_path
+        $slip_filename = basename(
+            parse_url(
+                $slip,
+                PHP_URL_PATH
             )
-        ) {
-
-            $slip_exists = true;
-
-        }
+        );
 
     }
-
-
-    /* payment_slips/... */
-
-    elseif (
-        strpos(
-            $slip,
-            'payment_slips/'
-        ) === 0
-    ) {
-
-        $slip_url =
-            'uploads/' .
-            $slip;
-
-
-        $full_slip_path =
-            __DIR__ .
-            '/' .
-            $slip_url;
-
-
-        if (
-            file_exists(
-                $full_slip_path
-            )
-        ) {
-
-            $slip_exists = true;
-
-        }
-
-    }
-
-
-    /* ชื่อไฟล์อย่างเดียว */
 
     else {
 
-        $slip_url =
-            'uploads/payment_slips/' .
-            $slip;
+        $slip_filename = basename(
+            $slip
+        );
 
 
-        $full_slip_path =
-            __DIR__ .
-            '/' .
-            $slip_url;
-
+        /*
+         * รองรับหลายรูปแบบ
+         */
 
         if (
-            file_exists(
-                $full_slip_path
-            )
+            strpos(
+                $slip,
+                'uploads/'
+            ) === 0
         ) {
 
-            $slip_exists = true;
+            $slip_url = $slip;
+
+        }
+
+        elseif (
+            strpos(
+                $slip,
+                'payment_slips/'
+            ) === 0
+        ) {
+
+            $slip_url =
+                'uploads/' .
+                $slip;
+
+        }
+
+        else {
+
+            $slip_url =
+                'uploads/payment_slips/' .
+                $slip;
 
         }
 
     }
 
+
+    /*
+     * ตรวจสอบไฟล์จริง
+     */
+
+    $possible_slip_paths = [
+
+        __DIR__ .
+        '/' .
+        ltrim(
+            $slip_url,
+            '/'
+        ),
+
+        __DIR__ .
+        '/uploads/payment_slips/' .
+        $slip_filename,
+
+        __DIR__ .
+        '/uploads/' .
+        $slip_filename,
+
+        __DIR__ .
+        '/' .
+        $slip_filename
+
+    ];
+
+
+    foreach (
+        $possible_slip_paths
+        as $path
+    ) {
+
+        if (
+            is_file($path)
+            &&
+            file_exists($path)
+        ) {
+
+            $slip_exists = true;
+
+
+            $slip_url = str_replace(
+                '\\',
+                '/',
+                str_replace(
+                    __DIR__ . '/',
+                    '',
+                    $path
+                )
+            );
+
+            break;
+        }
+    }
 }
 
 
 /* =========================================================
-   PAYMENT STATUS
-   ใช้ status แทน payment_status
+   PRICE
 ========================================================= */
 
-$payment_status =
-    ($status === 'paid')
-        ? 'paid'
-        : 'pending';
+$total_price = (float)(
+    $order['total_price'] ?? 0
+);
+
+
+$quantity = (int)(
+    $order['quantity'] ?? 1
+);
+
+
+if ($quantity <= 0) {
+    $quantity = 1;
+}
 
 ?>
 
@@ -917,6 +938,49 @@ body {
 }
 
 
+/* INFO */
+
+.info {
+
+    display:grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:15px;
+
+}
+
+
+.info-box {
+
+    background:#f8f9fa;
+
+    padding:15px;
+
+    border-radius:10px;
+
+}
+
+
+.label {
+
+    color:#888;
+
+    font-size:13px;
+
+    margin-bottom:5px;
+
+}
+
+
+.value {
+
+    font-weight:bold;
+
+}
+
+
 /* CUSTOMER */
 
 .customer {
@@ -956,13 +1020,6 @@ body {
 .shipping-box h2 {
 
     color:#2563eb;
-
-}
-
-
-.shipping-box p {
-
-    margin:8px 0;
 
 }
 
@@ -1202,6 +1259,8 @@ body {
 }
 
 
+/* MOBILE */
+
 @media(max-width:700px) {
 
     .navbar {
@@ -1216,6 +1275,13 @@ body {
         flex-direction:column;
 
         align-items:flex-start;
+
+    }
+
+
+    .info {
+
+        grid-template-columns:1fr;
 
     }
 
@@ -1240,17 +1306,13 @@ body {
 <body>
 
 
-<!-- =====================================================
-     NAVBAR
-===================================================== -->
-
 <nav class="navbar">
 
     <a
         href="index.php"
         class="logo"
     >
-        PD Shop
+        🛒 PD Shop
     </a>
 
 
@@ -1282,24 +1344,22 @@ body {
 
 <?php if (isset($_GET['verified'])): ?>
 
-<div class="success-message">
+    <div class="success-message">
 
-    ✅ ตรวจสอบสลิป
-    และยืนยันการชำระเงินเรียบร้อยแล้ว
+        ✅ ตรวจสอบสลิปและยืนยันการชำระเงินเรียบร้อยแล้ว
 
-</div>
+    </div>
 
 <?php endif; ?>
 
 
 <?php if (isset($_GET['updated'])): ?>
 
-<div class="success-message">
+    <div class="success-message">
 
-    ✅ บันทึกสถานะ
-    และข้อมูลการจัดส่งเรียบร้อยแล้ว
+        ✅ บันทึกสถานะและข้อมูลการจัดส่งเรียบร้อยแล้ว
 
-</div>
+    </div>
 
 <?php endif; ?>
 
@@ -1314,16 +1374,13 @@ body {
     <div class="header">
 
         <h1>
-
             📦 ออเดอร์
             #<?= (int)$order['id'] ?>
-
         </h1>
 
 
         <span
-            class="status
-            <?= htmlspecialchars(
+            class="status <?= htmlspecialchars(
                 $status_class
             ) ?>"
         >
@@ -1350,19 +1407,17 @@ body {
                 alt="สินค้า"
                 onerror="
                     this.style.display='none';
-                    document.getElementById('noProductImage').style.display='flex';
+                    document.getElementById('productNoImage').style.display='flex';
                 "
             >
 
-
             <div
-                id="noProductImage"
+                id="productNoImage"
                 class="no-image"
                 style="display:none;"
             >
                 📦
             </div>
-
 
         <?php else: ?>
 
@@ -1392,22 +1447,18 @@ body {
             </div>
 
 
-            <?php if (
-                !empty(
-                    $order['product_condition']
-                )
-            ): ?>
+            <br>
 
-                <div style="margin-top:8px;">
 
-                    สภาพ:
-                    <?= htmlspecialchars(
-                        $order['product_condition']
-                    ) ?>
+            <div>
 
-                </div>
+                จำนวน:
+                <strong>
+                    <?= $quantity ?>
+                </strong>
+                ชิ้น
 
-            <?php endif; ?>
+            </div>
 
 
             <br>
@@ -1416,7 +1467,7 @@ body {
             <div class="price">
 
                 ฿<?= number_format(
-                    (float)$order['total_price'],
+                    $total_price,
                     2
                 ) ?>
 
@@ -1682,7 +1733,6 @@ body {
             บริษัทขนส่ง:
         </strong>
 
-
         <?= !empty(
             $order['shipping_company']
         )
@@ -1702,7 +1752,6 @@ body {
         <strong>
             เลขพัสดุ:
         </strong>
-
 
         <?= !empty(
             $order['tracking_number']
@@ -1750,17 +1799,43 @@ body {
             target="_blank"
         >
 
-
             <img
                 src="<?= htmlspecialchars(
                     $slip_url
                 ) ?>"
                 class="slip-image"
-                alt="สลิปการชำระเงิน"
+                alt="หลักฐานการชำระเงิน"
+                onerror="
+                    this.style.display='none';
+                    document.getElementById('slipError').style.display='block';
+                "
             >
 
-
         </a>
+
+
+        <div
+            id="slipError"
+            class="warning"
+            style="display:none;"
+        >
+
+            ❌ ไม่สามารถโหลดรูปสลิปได้
+
+            <br><br>
+
+            <strong>
+                ไฟล์:
+            </strong>
+
+            <?= htmlspecialchars(
+                $slip
+            ) ?>
+
+        </div>
+
+
+        <br>
 
 
         <a
@@ -1771,14 +1846,12 @@ body {
             class="open-slip"
         >
 
-            🔍 เปิดรูปขนาดเต็ม
+            🔍 เปิดรูปสลิปขนาดเต็ม
 
         </a>
 
 
-        <?php if (
-            $payment_status === 'paid'
-        ): ?>
+        <?php if ($status === 'paid'): ?>
 
 
             <div
@@ -1854,21 +1927,28 @@ body {
 
         <div class="warning">
 
-            ❌ พบข้อมูลสลิปในฐานข้อมูล
-            แต่ไม่พบไฟล์รูป
-
+            ❌ พบชื่อไฟล์สลิปในฐานข้อมูล
+            แต่ไม่พบไฟล์รูปในเซิร์ฟเวอร์
 
             <br><br>
-
 
             <strong>
                 ชื่อไฟล์:
             </strong>
 
-
             <?= htmlspecialchars(
                 $slip
             ) ?>
+
+            <br><br>
+
+            ระบบกำลังค้นหาไฟล์ใน:
+
+            <br>
+
+            <code>
+                uploads/payment_slips/
+            </code>
 
         </div>
 
