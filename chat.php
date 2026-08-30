@@ -27,7 +27,7 @@ $stmt = $conn->prepare("
         u.name AS seller_name
     FROM products p
     JOIN users u
-        ON p.user_id = u.id
+        ON p.seller_id = u.id
     WHERE p.id = ?
       AND p.status IN ('approved', 'sold')
 ");
