@@ -1,23 +1,21 @@
 <?php
 require 'config.php';
 
-
-// =====================================================
-// ต้องล็อกอินก่อนซื้อ
-// =====================================================
+/* =====================================================
+   ต้องล็อกอินก่อนซื้อ
+===================================================== */
 
 if (!isset($_SESSION['user'])) {
-
     header("Location: login.php");
-
     exit;
-
 }
 
+$buyer_id = (int)$_SESSION['user']['id'];
 
-// =====================================================
-// รับข้อมูลจาก buy.php
-// =====================================================
+
+/* =====================================================
+   รับข้อมูลจาก buy.php
+===================================================== */
 
 $product_id = (int)($_POST['product_id'] ?? 0);
 
@@ -27,12 +25,10 @@ $phone = trim($_POST['phone'] ?? '');
 
 $address = trim($_POST['address'] ?? '');
 
-$buyer_id = (int)$_SESSION['user']['id'];
 
-
-// =====================================================
-// ตรวจสอบข้อมูล
-// =====================================================
+/* =====================================================
+   ตรวจสอบข้อมูล
+===================================================== */
 
 if (
     $product_id <= 0 ||
@@ -40,27 +36,41 @@ if (
     $phone === '' ||
     $address === ''
 ) {
-
     die("ข้อมูลไม่ครบ กรุณากลับไปกรอกข้อมูลใหม่");
-
 }
 
 
-// =====================================================
-// ดึงข้อมูลสินค้า
-// =====================================================
+/* =====================================================
+   ดึงข้อมูลสินค้า + ผู้ขาย
+===================================================== */
 
 $stmt = $conn->prepare("
     SELECT
         p.*,
-        c.name AS cat
+        c.name AS cat,
+        u.id AS seller_id,
+        u.name AS seller_name,
+        u.shop_name
     FROM products p
-    JOIN categories c
+
+    LEFT JOIN categories c
         ON p.category_id = c.id
+
+    LEFT JOIN users u
+        ON p.seller_id = u.id
+
     WHERE p.id = ?
     AND p.status = 'approved'
+
     LIMIT 1
 ");
+
+if (!$stmt) {
+    die(
+        "SQL Error: "
+        . htmlspecialchars($conn->error)
+    );
+}
 
 $stmt->bind_param(
     "i",
@@ -73,17 +83,45 @@ $result = $stmt->get_result();
 
 $product = $result->fetch_assoc();
 
+$stmt->close();
+
+
+/* =====================================================
+   ตรวจสอบสินค้า
+===================================================== */
 
 if (!$product) {
-
-    die("ไม่พบสินค้านี้");
-
+    die("ไม่พบสินค้านี้ หรือสินค้านี้ไม่พร้อมขาย");
 }
 
 
-// =====================================================
-// บันทึกคำสั่งซื้อ
-// =====================================================
+/* =====================================================
+   ป้องกันซื้อสินค้าของตัวเอง
+===================================================== */
+
+if (
+    isset($product['seller_id']) &&
+    (int)$product['seller_id'] === $buyer_id
+) {
+    die("ไม่สามารถซื้อสินค้าของตัวเองได้");
+}
+
+
+/* =====================================================
+   ตรวจสอบว่าสินค้ายังไม่ถูกขาย
+===================================================== */
+
+if (
+    isset($product['status']) &&
+    $product['status'] === 'sold'
+) {
+    die("สินค้านี้ขายไปแล้ว");
+}
+
+
+/* =====================================================
+   เตรียมข้อมูลคำสั่งซื้อ
+===================================================== */
 
 $price = (float)$product['price'];
 
@@ -94,11 +132,17 @@ $shipping_company = null;
 $tracking_number = null;
 
 
+/* =====================================================
+   บันทึกคำสั่งซื้อ
+
+   ❗ ไม่ใช้ buyer_name
+   เพราะ orders ไม่มีคอลัมน์ buyer_name
+===================================================== */
+
 $stmt = $conn->prepare("
     INSERT INTO orders (
         product_id,
         buyer_id,
-        buyer_name,
         phone,
         address,
         price,
@@ -106,15 +150,21 @@ $stmt = $conn->prepare("
         shipping_company,
         tracking_number
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ");
+
+if (!$stmt) {
+    die(
+        "SQL Error: "
+        . htmlspecialchars($conn->error)
+    );
+}
 
 
 $stmt->bind_param(
-    "iisssdsss",
+    "iissdsss",
     $product_id,
     $buyer_id,
-    $buyer_name,
     $phone,
     $address,
     $price,
@@ -128,17 +178,21 @@ if (!$stmt->execute()) {
 
     die(
         "ไม่สามารถบันทึกคำสั่งซื้อได้: "
-        . $stmt->error
+        . htmlspecialchars($stmt->error)
     );
-
 }
 
 
 $order_id = $conn->insert_id;
 
+$stmt->close();
+
+
+/* =====================================================
+   หน้าแสดงผล
+===================================================== */
+
 ?>
-
-
 
 <!doctype html>
 
@@ -167,56 +221,46 @@ $order_id = $conn->insert_id;
 <style>
 
 body {
-
     background:#f5f6f8;
-
 }
 
 
 .success-box {
-
     max-width:700px;
-
     margin:60px auto;
-
 }
 
 
 .card {
-
     border:0;
-
     border-radius:20px;
-
 }
 
 
 .success-icon {
-
     font-size:70px;
-
 }
 
 
 .price {
-
     color:#dc3545;
-
     font-size:28px;
-
     font-weight:bold;
-
 }
 
 
 .order-id {
-
     background:#f8f9fa;
-
     border-radius:12px;
-
     padding:15px;
+}
 
+
+.info-box {
+    background:#f8f9fa;
+    border-radius:12px;
+    padding:15px;
+    text-align:left;
 }
 
 
@@ -236,14 +280,11 @@ body {
 
 <div class="container">
 
-
 <a
     href="index.php"
-    class="navbar-brand fw-bold"
+    class="navbar-brand fw-bold text-dark text-decoration-none"
 >
-
-🛒 PD Shop
-
+    🛒 PD Shop
 </a>
 
 
@@ -251,11 +292,8 @@ body {
     href="my_orders.php"
     class="btn btn-outline-dark"
 >
-
-📦 การซื้อของฉัน
-
+    📦 การซื้อของฉัน
 </a>
-
 
 </div>
 
@@ -269,51 +307,41 @@ body {
 
 <div class="container">
 
-
 <div class="success-box">
-
 
 <div class="card shadow-sm p-5 text-center">
 
 
 <div class="success-icon">
-
-✅
-
+    ✅
 </div>
 
 
 <h2 class="mt-3">
-
-สั่งซื้อสำเร็จ!
-
+    สั่งซื้อสำเร็จ!
 </h2>
 
 
 <p class="text-secondary">
-
-ระบบบันทึกคำสั่งซื้อของคุณเรียบร้อยแล้ว
-
+    ระบบบันทึกคำสั่งซื้อของคุณเรียบร้อยแล้ว
 </p>
 
 
 
-<!-- เลขคำสั่งซื้อ -->
+<!-- =================================================
+     เลขคำสั่งซื้อ
+================================================= -->
 
 <div class="order-id mt-4">
 
 <strong>
-
-หมายเลขคำสั่งซื้อ
-
+    หมายเลขคำสั่งซื้อ
 </strong>
 
 <br>
 
 <span class="fs-4">
-
-#<?= (int)$order_id ?>
-
+    #<?= (int)$order_id ?>
 </span>
 
 </div>
@@ -324,19 +352,19 @@ body {
 
 
 
+<!-- =================================================
+     สินค้า
+================================================= -->
+
 <h4>
-
-<?= htmlspecialchars(
-    $product['name']
-) ?>
-
+    <?= htmlspecialchars($product['name']) ?>
 </h4>
 
 
 <div class="price">
 
 ฿<?= number_format(
-    $product['price'],
+    (float)$product['price'],
     2
 ) ?>
 
@@ -344,12 +372,95 @@ body {
 
 
 
+<!-- =================================================
+     ผู้ขาย
+================================================= -->
+
+<?php if (
+    !empty($product['shop_name']) ||
+    !empty($product['seller_name'])
+): ?>
+
+<div class="info-box mt-4">
+
+<strong>
+    🏪 ผู้ขาย
+</strong>
+
+<br>
+
+<?php if (!empty($product['shop_name'])): ?>
+
+ร้าน:
+<?= htmlspecialchars($product['shop_name']) ?>
+
+<br>
+
+<?php endif; ?>
+
+ผู้ขาย:
+<?= htmlspecialchars(
+    $product['seller_name'] ?? '-'
+) ?>
+
+</div>
+
+<?php endif; ?>
+
+
+
+<!-- =================================================
+     ที่อยู่จัดส่ง
+================================================= -->
+
+<div class="info-box mt-3">
+
+<strong>
+    📦 ข้อมูลการจัดส่ง
+</strong>
+
+<br><br>
+
+<strong>
+    ผู้รับ:
+</strong>
+
+<?= htmlspecialchars($buyer_name) ?>
+
+<br>
+
+<strong>
+    โทร:
+</strong>
+
+<?= htmlspecialchars($phone) ?>
+
+<br>
+
+<strong>
+    ที่อยู่:
+</strong>
+
+<br>
+
+<?= nl2br(
+    htmlspecialchars($address)
+) ?>
+
+</div>
+
+
+
+<!-- =================================================
+     STATUS
+================================================= -->
+
 <div class="alert alert-warning mt-4">
 
 📦 สถานะคำสั่งซื้อ:
 
 <strong>
-รอตรวจสอบ
+    รอตรวจสอบ
 </strong>
 
 <br>
@@ -361,16 +472,17 @@ body {
 
 
 
-<div class="d-grid gap-2 mt-4">
+<!-- =================================================
+     BUTTON
+================================================= -->
 
+<div class="d-grid gap-2 mt-4">
 
 <a
     href="my_orders.php"
     class="btn btn-success btn-lg"
 >
-
-📦 ดูการซื้อของฉัน
-
+    📦 ดูการซื้อของฉัน
 </a>
 
 
@@ -378,22 +490,18 @@ body {
     href="index.php"
     class="btn btn-outline-dark btn-lg"
 >
-
-← กลับหน้าสินค้า
-
+    ← กลับหน้าสินค้า
 </a>
 
-
 </div>
 
 
 </div>
 
+</div>
 
 </div>
 
-
-</div>
 
 
 </body>
