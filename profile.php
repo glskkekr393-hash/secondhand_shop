@@ -1,3 +1,4 @@
+```php
 <?php
 require 'config.php';
 
@@ -7,10 +8,8 @@ if (!isset($_SESSION['user'])) {
 }
 
 $user_id = (int)$_SESSION['user']['id'];
-
 $message = "";
 $error = "";
-
 
 /* =====================================================
    บันทึกโปรไฟล์
@@ -23,21 +22,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $shop_contact = trim($_POST['shop_contact'] ?? '');
 
     if ($name === '') {
+
         $error = "กรุณากรอกชื่อผู้ใช้";
+
     } else {
 
-        /* ---------------------------------------------
-           รูปร้าน
-        --------------------------------------------- */
+        /* =================================================
+           รูปโปรไฟล์ / รูปร้าน
+        ================================================= */
 
-        $shop_image = null;
+        $profile_image = null;
 
         if (
-            isset($_FILES['shop_image']) &&
-            $_FILES['shop_image']['error'] === UPLOAD_ERR_OK
+            isset($_FILES['profile_image']) &&
+            $_FILES['profile_image']['error'] === UPLOAD_ERR_OK
         ) {
 
-            $file = $_FILES['shop_image'];
+            $file = $_FILES['profile_image'];
 
             $allowed = [
                 'image/jpeg',
@@ -84,25 +85,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $target
                 )) {
 
-                    $shop_image =
+                    $profile_image =
                         "uploads/shop/" . $filename;
 
                 } else {
 
                     $error = "ไม่สามารถอัปโหลดรูปภาพได้";
-
                 }
             }
         }
 
-
-        /* ---------------------------------------------
-           บันทึกข้อมูล
-        --------------------------------------------- */
+        /* =================================================
+           บันทึกข้อมูลลง users
+        ================================================= */
 
         if ($error === "") {
 
-            if ($shop_image !== null) {
+            if ($profile_image !== null) {
 
                 $stmt = $conn->prepare("
                     UPDATE users
@@ -110,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         name = ?,
                         shop_name = ?,
                         shop_contact = ?,
-                        shop_image = ?
+                        profile_image = ?
                     WHERE id = ?
                 ");
 
@@ -119,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $name,
                     $shop_name,
                     $shop_contact,
-                    $shop_image,
+                    $profile_image,
                     $user_id
                 );
 
@@ -143,11 +142,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             }
 
-
             if ($stmt->execute()) {
 
                 /* อัปเดต session */
-
                 $_SESSION['user']['name'] = $name;
 
                 $message = "บันทึกโปรไฟล์เรียบร้อยแล้ว";
@@ -155,8 +152,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
 
                 $error = "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
-
             }
+
+            $stmt->close();
         }
     }
 }
@@ -173,9 +171,10 @@ $stmt = $conn->prepare("
         email,
         shop_name,
         shop_contact,
-        shop_image
+        profile_image
     FROM users
     WHERE id = ?
+    LIMIT 1
 ");
 
 $stmt->bind_param(
@@ -187,6 +186,7 @@ $stmt->execute();
 
 $user = $stmt->get_result()->fetch_assoc();
 
+$stmt->close();
 
 if (!$user) {
     die("ไม่พบข้อมูลผู้ใช้");
@@ -195,7 +195,6 @@ if (!$user) {
 ?>
 
 <!doctype html>
-
 <html lang="th">
 
 <head>
@@ -216,7 +215,6 @@ if (!$user) {
     rel="stylesheet"
 >
 
-
 <style>
 
 /* =====================================================
@@ -226,42 +224,25 @@ if (!$user) {
 :root {
 
     --bg: #f5f6f8;
-
     --card: #ffffff;
-
     --text: #111111;
-
     --secondary: #6c757d;
-
     --border: #e5e5e5;
-
     --input: #ffffff;
-
     --placeholder: #777777;
-
     --nav: #ffffff;
-
 }
-
 
 html[data-theme="dark"] {
 
     --bg: #101010;
-
     --card: #1c1c1c;
-
     --text: #ffffff;
-
     --secondary: #aaaaaa;
-
     --border: #333333;
-
     --input: #252525;
-
     --placeholder: #999999;
-
     --nav: #181818;
-
 }
 
 
@@ -272,13 +253,11 @@ html[data-theme="dark"] {
 body {
 
     background: var(--bg);
-
     color: var(--text);
 
     transition:
         background .2s ease,
         color .2s ease;
-
 }
 
 
@@ -292,14 +271,11 @@ body {
 
     border-bottom:
         1px solid var(--border);
-
 }
-
 
 .navbar-brand {
 
     color: var(--text) !important;
-
 }
 
 
@@ -320,7 +296,6 @@ body {
     background: var(--card);
 
     color: var(--text);
-
 }
 
 
@@ -342,9 +317,7 @@ body {
 
     box-shadow:
         0 4px 15px rgba(0,0,0,.15);
-
 }
-
 
 .shop-placeholder {
 
@@ -365,7 +338,6 @@ body {
     font-size: 70px;
 
     margin: auto;
-
 }
 
 
@@ -380,9 +352,7 @@ body {
     color: var(--text);
 
     border-color: var(--border);
-
 }
-
 
 .form-control:focus {
 
@@ -391,28 +361,21 @@ body {
     color: var(--text);
 
     border-color: #666;
-
 }
-
 
 .form-control::placeholder {
 
     color: var(--placeholder);
-
 }
-
 
 .form-label {
 
     color: var(--text);
-
 }
-
 
 .form-text {
 
     color: var(--secondary);
-
 }
 
 
@@ -423,7 +386,6 @@ body {
 .text-secondary {
 
     color: var(--secondary) !important;
-
 }
 
 
@@ -457,14 +419,11 @@ body {
     font-size: 19px;
 
     transition: .2s;
-
 }
-
 
 .theme-btn:hover {
 
     transform: scale(1.06);
-
 }
 
 
@@ -477,34 +436,27 @@ html[data-theme="dark"] .btn-outline-dark {
     color: #fff;
 
     border-color: #fff;
-
 }
-
 
 html[data-theme="dark"] .btn-outline-dark:hover {
 
     background: #fff;
 
     color: #111;
-
 }
-
 
 html[data-theme="dark"] .btn-outline-secondary {
 
     color: #fff;
 
     border-color: #666;
-
 }
-
 
 html[data-theme="dark"] .btn-outline-secondary:hover {
 
     background: #fff;
 
     color: #111;
-
 }
 
 
@@ -515,7 +467,6 @@ html[data-theme="dark"] .btn-outline-secondary:hover {
 footer {
 
     color: var(--secondary) !important;
-
 }
 
 </style>
@@ -524,7 +475,7 @@ footer {
 <script>
 
 /* =====================================================
-   โหลดธีมก่อนหน้า
+   โหลดธีม
 ===================================================== */
 
 (function () {
@@ -551,27 +502,22 @@ function toggleTheme() {
             "data-theme"
         );
 
-
     const next =
         current === "dark"
             ? "light"
             : "dark";
-
 
     document.documentElement.setAttribute(
         "data-theme",
         next
     );
 
-
     localStorage.setItem(
         "theme",
         next
     );
 
-
     updateThemeButton();
-
 }
 
 
@@ -586,15 +532,12 @@ function updateThemeButton() {
             "data-theme"
         );
 
-
     const button =
         document.getElementById(
             "themeButton"
         );
 
-
     if (!button) return;
-
 
     if (theme === "dark") {
 
@@ -609,15 +552,9 @@ function updateThemeButton() {
 
         button.title =
             "เปลี่ยนเป็นโหมดมืด";
-
     }
-
 }
 
-
-/* =====================================================
-   LOAD
-===================================================== */
 
 document.addEventListener(
     "DOMContentLoaded",
@@ -644,19 +581,15 @@ document.addEventListener(
 
 <div class="container">
 
-
 <a
     href="index.php"
     class="navbar-brand fw-bold text-decoration-none"
 >
-
 🛒 PD Shop
-
 </a>
 
 
 <div class="d-flex align-items-center">
-
 
 <a
     href="index.php"
@@ -665,14 +598,12 @@ document.addEventListener(
 หน้าหลัก
 </a>
 
-
 <a
     href="my_orders.php"
     class="btn btn-outline-dark me-2"
 >
 📦 ออเดอร์
 </a>
-
 
 <a
     href="favorites.php"
@@ -682,10 +613,6 @@ document.addEventListener(
 </a>
 
 
-<!-- =====================================================
-     THEME BUTTON
-===================================================== -->
-
 <button
     type="button"
     id="themeButton"
@@ -693,18 +620,14 @@ document.addEventListener(
     onclick="toggleTheme()"
     title="เปลี่ยนธีม"
 >
-
 🌙
-
 </button>
-
 
 </div>
 
 </div>
 
 </nav>
-
 
 
 <!-- =====================================================
@@ -716,7 +639,6 @@ document.addEventListener(
 
 <div class="card profile-card shadow-sm">
 
-
 <div class="card-body p-4 p-md-5">
 
 
@@ -724,11 +646,9 @@ document.addEventListener(
 👤 โปรไฟล์ของฉัน
 </h2>
 
-
 <p class="text-secondary mb-4">
 ตั้งค่าข้อมูลร้านและข้อมูลติดต่อของคุณ
 </p>
-
 
 
 <?php if ($message !== ""): ?>
@@ -753,7 +673,6 @@ document.addEventListener(
 <?php endif; ?>
 
 
-
 <!-- =====================================================
      รูปร้าน
 ===================================================== -->
@@ -761,10 +680,10 @@ document.addEventListener(
 <div class="text-center mb-4">
 
 
-<?php if (!empty($user['shop_image'])): ?>
+<?php if (!empty($user['profile_image'])): ?>
 
 <img
-    src="<?= htmlspecialchars($user['shop_image']) ?>"
+    src="<?= htmlspecialchars($user['profile_image']) ?>"
     class="shop-image"
     alt="รูปภาพร้าน"
 >
@@ -782,13 +701,11 @@ document.addEventListener(
 รูปภาพร้าน
 </h5>
 
-
 <p class="text-secondary">
 รูปนี้จะแสดงในหน้าโปรไฟล์ของร้าน
 </p>
 
 </div>
-
 
 
 <!-- =====================================================
@@ -809,7 +726,6 @@ document.addEventListener(
 ชื่อผู้ใช้
 </label>
 
-
 <input
     type="text"
     name="name"
@@ -821,7 +737,6 @@ document.addEventListener(
 </div>
 
 
-
 <!-- ชื่อร้าน -->
 
 <div class="mb-3">
@@ -829,7 +744,6 @@ document.addEventListener(
 <label class="form-label fw-bold">
 🏪 ชื่อร้าน
 </label>
-
 
 <input
     type="text"
@@ -842,7 +756,6 @@ document.addEventListener(
 </div>
 
 
-
 <!-- ติดต่อเพิ่มเติม -->
 
 <div class="mb-3">
@@ -850,7 +763,6 @@ document.addEventListener(
 <label class="form-label fw-bold">
 📞 ช่องทางติดต่อเพิ่มเติม
 </label>
-
 
 <input
     type="text"
@@ -863,7 +775,6 @@ document.addEventListener(
 </div>
 
 
-
 <!-- รูปภาพ -->
 
 <div class="mb-4">
@@ -872,14 +783,12 @@ document.addEventListener(
 🖼️ รูปภาพร้าน
 </label>
 
-
 <input
     type="file"
-    name="shop_image"
+    name="profile_image"
     class="form-control form-control-lg"
     accept="image/jpeg,image/png,image/webp,image/gif"
 >
-
 
 <div class="form-text">
 
@@ -891,21 +800,15 @@ document.addEventListener(
 </div>
 
 
-
-<!-- =====================================================
-     BUTTON
-===================================================== -->
+<!-- BUTTON -->
 
 <div class="d-grid gap-2">
-
 
 <button
     type="submit"
     class="btn btn-dark btn-lg"
 >
-
 💾 บันทึกโปรไฟล์
-
 </button>
 
 
@@ -913,24 +816,19 @@ document.addEventListener(
     href="index.php"
     class="btn btn-outline-secondary"
 >
-
 ← กลับหน้าหลัก
-
 </a>
-
 
 </div>
 
 
 </form>
 
-
 </div>
 
 </div>
 
 </div>
-
 
 
 <!-- =====================================================
@@ -946,9 +844,7 @@ document.addEventListener(
 <br>
 
 <small>
-
 เว็บไซต์ซื้อ–ขายสินค้ามือสอง
-
 </small>
 
 </footer>
@@ -957,3 +853,4 @@ document.addEventListener(
 </body>
 
 </html>
+```
