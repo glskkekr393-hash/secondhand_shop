@@ -1,3 +1,4 @@
+```php
 <?php
 
 require_once __DIR__ . '/config.php';
@@ -6,12 +7,22 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
 if (!isset($_SESSION['user']['id'])) {
     header("Location: login.php");
     exit;
 }
 
 $user_id = (int) $_SESSION['user']['id'];
+
+
+/* =========================================================
+   ORDER ID
+========================================================= */
 
 $order_id = (int) (
     $_GET['id']
@@ -25,19 +36,16 @@ if ($order_id <= 0) {
 
 
 /* =========================================================
-   ตรวจสอบว่าออเดอร์เป็นของผู้ขาย
-   ใช้ orders.seller_id
-   ========================================================= */
+   ตรวจสอบว่าเป็นออเดอร์ของผู้ขาย
+========================================================= */
 
 function checkSellerOrder($conn, $order_id, $user_id)
 {
     $sql = "
-        SELECT
-            o.id
-        FROM orders o
-        WHERE
-            o.id = ?
-            AND o.seller_id = ?
+        SELECT id
+        FROM orders
+        WHERE id = ?
+        AND seller_id = ?
         LIMIT 1
     ";
 
@@ -69,8 +77,8 @@ function checkSellerOrder($conn, $order_id, $user_id)
 
 
 /* =========================================================
-   จัดการ POST
-   ========================================================= */
+   POST ACTION
+========================================================= */
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST'
@@ -81,7 +89,9 @@ if (
     $action = $_POST['action'];
 
 
-    /* ตรวจสอบสิทธิ์ผู้ขาย */
+    /* -----------------------------------------------------
+       ตรวจสอบสิทธิ์
+    ----------------------------------------------------- */
 
     $check = checkSellerOrder(
         $conn,
@@ -95,19 +105,17 @@ if (
 
 
     /* =====================================================
-       ตรวจสอบการชำระเงิน
+       ยืนยันการชำระเงิน
+       ใช้ status = paid
        ===================================================== */
 
     if ($action === 'verify_payment') {
 
         $sql = "
             UPDATE orders
-            SET
-                payment_status = 'paid',
-                status = 'paid'
-            WHERE
-                id = ?
-                AND seller_id = ?
+            SET status = 'paid'
+            WHERE id = ?
+            AND seller_id = ?
         ";
 
         $stmt = $conn->prepare($sql);
@@ -128,6 +136,7 @@ if (
         $stmt->execute();
 
         $stmt->close();
+
 
         header(
             "Location: order_detail.php?id=" .
@@ -158,7 +167,9 @@ if (
         );
 
 
-        /* สถานะตาม ENUM ใน orders */
+        /* -------------------------------------------------
+           สถานะที่ฐานข้อมูล ENUM รองรับ
+        ------------------------------------------------- */
 
         $allowed_status = [
             'pending',
@@ -174,28 +185,20 @@ if (
             $allowed_status,
             true
         )) {
+
             $status = 'pending';
-        }
-
-
-        /* ถ้าสถานะเป็น paid ให้ payment_status เป็น paid */
-
-        if ($status === 'paid') {
-
-            $payment_status = 'paid';
-
-        } else {
-
-            $payment_status = 'pending';
 
         }
 
+
+        /* -------------------------------------------------
+           UPDATE
+        ------------------------------------------------- */
 
         $sql = "
             UPDATE orders
             SET
                 status = ?,
-                payment_status = ?,
                 shipping_company = ?,
                 tracking_number = ?
             WHERE
@@ -203,28 +206,33 @@ if (
                 AND seller_id = ?
         ";
 
+
         $stmt = $conn->prepare($sql);
 
         if (!$stmt) {
+
             die(
                 "เกิดข้อผิดพลาด SQL: " .
                 htmlspecialchars($conn->error)
             );
+
         }
 
+
         $stmt->bind_param(
-            "ssssii",
+            "sssii",
             $status,
-            $payment_status,
             $shipping_company,
             $tracking_number,
             $order_id,
             $user_id
         );
 
+
         $stmt->execute();
 
         $stmt->close();
+
 
         header(
             "Location: order_detail.php?id=" .
@@ -239,10 +247,11 @@ if (
 
 /* =========================================================
    ดึงข้อมูลออเดอร์
-   ========================================================= */
+========================================================= */
 
 $sql = "
     SELECT
+
         o.*,
 
         p.name AS product_name,
@@ -265,14 +274,18 @@ $sql = "
     LIMIT 1
 ";
 
+
 $stmt = $conn->prepare($sql);
 
 if (!$stmt) {
+
     die(
         "เกิดข้อผิดพลาด SQL: " .
         htmlspecialchars($conn->error)
     );
+
 }
+
 
 $stmt->bind_param(
     "ii",
@@ -280,25 +293,36 @@ $stmt->bind_param(
     $user_id
 );
 
+
 $stmt->execute();
+
 
 $result = $stmt->get_result();
 
+
 $order = $result->fetch_assoc();
+
 
 $stmt->close();
 
 
+/* =========================================================
+   ไม่พบออเดอร์
+========================================================= */
+
 if (!$order) {
 
     die("
+
         <div style='
             font-family:Arial;
             text-align:center;
             padding:60px;
         '>
 
-            <h2>❌ ไม่พบออเดอร์</h2>
+            <h2>
+                ❌ ไม่พบออเดอร์
+            </h2>
 
             <p>
                 ออเดอร์นี้ไม่มีอยู่
@@ -312,13 +336,15 @@ if (!$order) {
             </a>
 
         </div>
+
     ");
+
 }
 
 
 /* =========================================================
    STATUS
-   ========================================================= */
+========================================================= */
 
 $status = trim(
     $order['status'] ?? 'pending'
@@ -361,7 +387,7 @@ elseif ($status === 'cancelled') {
 
 /* =========================================================
    STATUS CLASS
-   ========================================================= */
+========================================================= */
 
 $status_class = 'pending';
 
@@ -393,11 +419,12 @@ elseif ($status === 'cancelled') {
 
 /* =========================================================
    PRODUCT IMAGE
-   ========================================================= */
+========================================================= */
 
 $product_image = trim(
     $order['product_image'] ?? ''
 );
+
 
 $product_url = '';
 
@@ -419,6 +446,22 @@ if ($product_image !== '') {
     if (
         strpos(
             $product_image,
+            'http://'
+        ) === 0
+        ||
+        strpos(
+            $product_image,
+            'https://'
+        ) === 0
+    ) {
+
+        $product_url = $product_image;
+
+    }
+
+    elseif (
+        strpos(
+            $product_image,
             'uploads/'
         ) === 0
     ) {
@@ -430,19 +473,22 @@ if ($product_image !== '') {
     else {
 
         $product_url =
-            'uploads/' . $product_image;
+            'uploads/' .
+            $product_image;
 
     }
+
 }
 
 
 /* =========================================================
-   SLIP IMAGE
-   ========================================================= */
+   PAYMENT SLIP
+========================================================= */
 
 $slip = trim(
     $order['payment_slip'] ?? ''
 );
+
 
 $slip_url = '';
 
@@ -463,7 +509,30 @@ if ($slip !== '') {
     );
 
 
+    /* URL เต็ม */
+
     if (
+        strpos(
+            $slip,
+            'http://'
+        ) === 0
+        ||
+        strpos(
+            $slip,
+            'https://'
+        ) === 0
+    ) {
+
+        $slip_url = $slip;
+
+        $slip_exists = true;
+
+    }
+
+
+    /* uploads/... */
+
+    elseif (
         strpos(
             $slip,
             'uploads/'
@@ -472,7 +541,25 @@ if ($slip !== '') {
 
         $slip_url = $slip;
 
+        $full_slip_path =
+            __DIR__ .
+            '/' .
+            $slip_url;
+
+        if (
+            file_exists(
+                $full_slip_path
+            )
+        ) {
+
+            $slip_exists = true;
+
+        }
+
     }
+
+
+    /* payment_slips/... */
 
     elseif (
         strpos(
@@ -482,37 +569,68 @@ if ($slip !== '') {
     ) {
 
         $slip_url =
-            'uploads/' . $slip;
+            'uploads/' .
+            $slip;
+
+
+        $full_slip_path =
+            __DIR__ .
+            '/' .
+            $slip_url;
+
+
+        if (
+            file_exists(
+                $full_slip_path
+            )
+        ) {
+
+            $slip_exists = true;
+
+        }
 
     }
+
+
+    /* ชื่อไฟล์อย่างเดียว */
 
     else {
 
         $slip_url =
-            'uploads/payment_slips/' . $slip;
+            'uploads/payment_slips/' .
+            $slip;
+
+
+        $full_slip_path =
+            __DIR__ .
+            '/' .
+            $slip_url;
+
+
+        if (
+            file_exists(
+                $full_slip_path
+            )
+        ) {
+
+            $slip_exists = true;
+
+        }
 
     }
 
-
-    $full_slip_path =
-        __DIR__ . '/' . $slip_url;
-
-
-    if (file_exists($full_slip_path)) {
-
-        $slip_exists = true;
-
-    }
 }
 
 
 /* =========================================================
    PAYMENT STATUS
-   ========================================================= */
+   ใช้ status แทน payment_status
+========================================================= */
 
-$payment_status = trim(
-    $order['payment_status'] ?? 'pending'
-);
+$payment_status =
+    ($status === 'paid')
+        ? 'paid'
+        : 'pending';
 
 ?>
 
@@ -530,7 +648,8 @@ $payment_status = trim(
 >
 
 <title>
-    รายละเอียดออเดอร์ #<?= (int)$order['id'] ?>
+    รายละเอียดออเดอร์
+    #<?= (int)$order['id'] ?>
 </title>
 
 
@@ -538,319 +657,578 @@ $payment_status = trim(
 
 * {
     box-sizing:border-box;
-    font-family:Arial,Tahoma,sans-serif;
+    font-family:
+        Arial,
+        Tahoma,
+        sans-serif;
 }
+
 
 body {
+
     margin:0;
+
     background:#f5f6fa;
+
     color:#333;
+
 }
+
 
 .navbar {
+
     height:65px;
+
     background:#fff;
+
     display:flex;
+
     align-items:center;
+
     justify-content:space-between;
+
     padding:0 30px;
-    box-shadow:0 2px 10px rgba(0,0,0,.08);
+
+    box-shadow:
+        0 2px 10px
+        rgba(0,0,0,.08);
+
 }
+
 
 .logo {
+
     color:#ff6b35;
+
     font-size:22px;
+
     font-weight:bold;
+
     text-decoration:none;
+
 }
+
 
 .navbar a {
+
     text-decoration:none;
+
     color:#555;
+
     margin-left:15px;
+
 }
+
 
 .container {
+
     max-width:900px;
+
     margin:30px auto;
+
     padding:0 20px;
+
 }
+
 
 .back {
+
     display:inline-block;
+
     margin-bottom:20px;
+
     color:#ff6b35;
+
     text-decoration:none;
+
     font-weight:bold;
+
 }
+
 
 .card {
+
     background:#fff;
+
     padding:25px;
+
     margin-bottom:20px;
+
     border-radius:15px;
-    box-shadow:0 3px 15px rgba(0,0,0,.06);
+
+    box-shadow:
+        0 3px 15px
+        rgba(0,0,0,.06);
+
 }
+
 
 .header {
+
     display:flex;
+
     justify-content:space-between;
+
     align-items:center;
+
     border-bottom:1px solid #eee;
+
     padding-bottom:15px;
+
     margin-bottom:20px;
+
 }
+
 
 .header h1 {
+
     margin:0;
+
     font-size:24px;
+
 }
+
 
 .status {
+
     padding:8px 15px;
+
     border-radius:20px;
+
     font-size:14px;
+
     font-weight:bold;
+
 }
+
 
 .pending {
+
     background:#fff3cd;
+
     color:#856404;
+
 }
+
 
 .paid {
+
     background:#d1ecf1;
+
     color:#0c5460;
+
 }
+
 
 .shipping {
+
     background:#cfe2ff;
+
     color:#084298;
+
 }
+
 
 .completed {
+
     background:#d1e7dd;
+
     color:#0f5132;
+
 }
+
 
 .cancelled {
+
     background:#f8d7da;
+
     color:#842029;
+
 }
+
+
+/* PRODUCT */
 
 .product {
+
     display:flex;
+
     align-items:center;
+
     gap:20px;
+
 }
+
 
 .product-image {
+
     width:150px;
+
     height:150px;
+
     object-fit:cover;
+
     border-radius:12px;
+
     background:#eee;
+
 }
+
 
 .no-image {
+
     width:150px;
+
     height:150px;
+
     background:#eee;
+
     border-radius:12px;
+
     display:flex;
+
     align-items:center;
+
     justify-content:center;
+
     font-size:50px;
+
 }
+
 
 .product-name {
+
     font-size:22px;
+
     font-weight:bold;
+
     margin-bottom:10px;
+
 }
+
 
 .price {
+
     color:#ff6b35;
+
     font-size:25px;
+
     font-weight:bold;
+
 }
 
-.info {
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:15px;
-}
 
-.info-box {
-    background:#f8f9fa;
-    padding:15px;
-    border-radius:10px;
-}
+/* CUSTOMER */
 
 .customer {
+
     background:#fff8f4;
+
     border:1px solid #ffe1d5;
+
 }
+
 
 .customer h2 {
+
     color:#ff6b35;
+
 }
+
 
 .customer p {
+
     margin:8px 0;
+
 }
+
+
+/* SHIPPING */
 
 .shipping-box {
+
     background:#f4f8ff;
+
     border:1px solid #dce9ff;
+
 }
+
 
 .shipping-box h2 {
+
     color:#2563eb;
+
 }
+
+
+.shipping-box p {
+
+    margin:8px 0;
+
+}
+
+
+/* FORM */
 
 .edit-box {
+
     background:#f8f9fa;
+
     padding:20px;
+
     border-radius:12px;
+
 }
+
 
 .form-group {
+
     margin-bottom:16px;
+
 }
 
+
 .form-group label {
+
     display:block;
+
     font-weight:bold;
+
     margin-bottom:7px;
+
 }
+
 
 .form-group input,
 .form-group select {
+
     width:100%;
+
     padding:12px;
+
     border:1px solid #ddd;
+
     border-radius:8px;
+
     font-size:15px;
+
     background:#fff;
+
 }
+
 
 .form-group input:focus,
 .form-group select:focus {
+
     outline:none;
+
     border-color:#ff6b35;
+
 }
+
 
 .save-button {
+
     width:100%;
+
     border:none;
+
     background:#ff6b35;
+
     color:white;
+
     padding:13px;
+
     border-radius:9px;
+
     font-size:16px;
+
     font-weight:bold;
+
     cursor:pointer;
+
 }
+
 
 .save-button:hover {
+
     background:#e85b28;
+
 }
+
+
+/* SLIP */
 
 .slip-box {
+
     text-align:center;
+
 }
+
 
 .slip-image {
+
     display:block;
+
     max-width:100%;
+
     max-height:700px;
+
     margin:20px auto;
+
     border-radius:12px;
+
     border:1px solid #ddd;
-    box-shadow:0 3px 15px rgba(0,0,0,.1);
+
+    box-shadow:
+        0 3px 15px
+        rgba(0,0,0,.1);
+
 }
+
 
 .open-slip {
+
     display:inline-block;
+
     background:#ff6b35;
+
     color:#fff;
+
     padding:10px 18px;
+
     border-radius:8px;
+
     text-decoration:none;
+
     font-weight:bold;
+
 }
+
+
+/* PAYMENT */
 
 .payment-status {
+
     margin-top:20px;
+
     padding:15px;
+
     border-radius:10px;
+
     font-weight:bold;
+
 }
+
 
 .payment-pending {
+
     background:#fff3cd;
+
     color:#856404;
+
 }
+
 
 .payment-paid {
+
     background:#d1e7dd;
+
     color:#0f5132;
+
 }
+
 
 .verify-button {
+
     width:100%;
+
     margin-top:15px;
+
     border:none;
+
     background:#198754;
+
     color:white;
+
     padding:14px;
+
     border-radius:9px;
+
     font-size:16px;
+
     font-weight:bold;
+
     cursor:pointer;
+
 }
+
 
 .verify-button:hover {
+
     background:#157347;
+
 }
+
 
 .warning {
+
     background:#fff3cd;
+
     color:#856404;
+
     padding:15px;
+
     border-radius:10px;
+
     text-align:left;
+
 }
 
+
 .success-message {
+
     background:#d1e7dd;
+
     color:#0f5132;
+
     padding:15px;
+
     border-radius:10px;
+
     margin-bottom:20px;
+
     font-weight:bold;
+
 }
+
 
 @media(max-width:700px) {
 
     .navbar {
+
         padding:0 15px;
+
     }
+
 
     .product {
+
         flex-direction:column;
+
         align-items:flex-start;
+
     }
 
-    .info {
-        grid-template-columns:1fr;
-    }
 
     .header {
+
         flex-direction:column;
+
         align-items:flex-start;
+
         gap:10px;
+
     }
 
 }
@@ -863,6 +1241,10 @@ body {
 <body>
 
 
+<!-- =====================================================
+     NAVBAR
+===================================================== -->
+
 <nav class="navbar">
 
     <a
@@ -871,6 +1253,7 @@ body {
     >
         PD Shop
     </a>
+
 
     <div>
 
@@ -901,7 +1284,10 @@ body {
 <?php if (isset($_GET['verified'])): ?>
 
 <div class="success-message">
-    ✅ ตรวจสอบสลิปและยืนยันการชำระเงินเรียบร้อยแล้ว
+
+    ✅ ตรวจสอบสลิป
+    และยืนยันการชำระเงินเรียบร้อยแล้ว
+
 </div>
 
 <?php endif; ?>
@@ -910,7 +1296,10 @@ body {
 <?php if (isset($_GET['updated'])): ?>
 
 <div class="success-message">
-    ✅ บันทึกสถานะและข้อมูลการจัดส่งเรียบร้อยแล้ว
+
+    ✅ บันทึกสถานะ
+    และข้อมูลการจัดส่งเรียบร้อยแล้ว
+
 </div>
 
 <?php endif; ?>
@@ -922,17 +1311,28 @@ body {
 
 <div class="card">
 
+
     <div class="header">
 
         <h1>
+
             📦 ออเดอร์
             #<?= (int)$order['id'] ?>
+
         </h1>
 
+
         <span
-            class="status <?= htmlspecialchars($status_class) ?>"
+            class="status
+            <?= htmlspecialchars(
+                $status_class
+            ) ?>"
         >
-            <?= htmlspecialchars($status_text) ?>
+
+            <?= htmlspecialchars(
+                $status_text
+            ) ?>
+
         </span>
 
     </div>
@@ -944,10 +1344,26 @@ body {
         <?php if ($product_url !== ''): ?>
 
             <img
-                src="<?= htmlspecialchars($product_url) ?>"
+                src="<?= htmlspecialchars(
+                    $product_url
+                ) ?>"
                 class="product-image"
                 alt="สินค้า"
+                onerror="
+                    this.style.display='none';
+                    document.getElementById('noProductImage').style.display='flex';
+                "
             >
+
+
+            <div
+                id="noProductImage"
+                class="no-image"
+                style="display:none;"
+            >
+                📦
+            </div>
+
 
         <?php else: ?>
 
@@ -970,18 +1386,26 @@ body {
 
 
             <div>
+
                 รหัสสินค้า:
                 #<?= (int)$order['product_id'] ?>
+
             </div>
 
 
-            <?php if (!empty($order['product_condition'])): ?>
+            <?php if (
+                !empty(
+                    $order['product_condition']
+                )
+            ): ?>
 
                 <div style="margin-top:8px;">
+
                     สภาพ:
                     <?= htmlspecialchars(
                         $order['product_condition']
                     ) ?>
+
                 </div>
 
             <?php endif; ?>
@@ -1012,24 +1436,30 @@ body {
 
 <div class="card">
 
+
     <h2>
         ✏️ จัดการออเดอร์
     </h2>
 
+
     <br>
 
+
     <div class="edit-box">
+
 
         <form
             method="POST"
             action="order_detail.php?id=<?= (int)$order['id'] ?>"
         >
 
+
             <input
                 type="hidden"
                 name="order_id"
                 value="<?= (int)$order['id'] ?>"
             >
+
 
             <input
                 type="hidden"
@@ -1044,7 +1474,9 @@ body {
                     🔄 สถานะออเดอร์
                 </label>
 
+
                 <select name="status">
+
 
                     <option
                         value="pending"
@@ -1100,6 +1532,7 @@ body {
                         ยกเลิก
                     </option>
 
+
                 </select>
 
             </div>
@@ -1111,11 +1544,13 @@ body {
                     🚚 บริษัทขนส่ง
                 </label>
 
+
                 <input
                     type="text"
                     name="shipping_company"
                     value="<?= htmlspecialchars(
-                        $order['shipping_company'] ?? ''
+                        $order['shipping_company']
+                        ?? ''
                     ) ?>"
                     placeholder="เช่น Flash Express"
                 >
@@ -1129,11 +1564,13 @@ body {
                     📦 เลขพัสดุ
                 </label>
 
+
                 <input
                     type="text"
                     name="tracking_number"
                     value="<?= htmlspecialchars(
-                        $order['tracking_number'] ?? ''
+                        $order['tracking_number']
+                        ?? ''
                     ) ?>"
                     placeholder="กรอกเลขพัสดุ"
                 >
@@ -1150,8 +1587,11 @@ body {
                     );
                 "
             >
+
                 💾 บันทึกข้อมูลออเดอร์
+
             </button>
+
 
         </form>
 
@@ -1166,11 +1606,14 @@ body {
 
 <div class="card customer">
 
+
     <h2>
         👤 ข้อมูลผู้ซื้อ
     </h2>
 
+
     <br>
+
 
     <p>
 
@@ -1179,7 +1622,8 @@ body {
         </strong>
 
         <?= htmlspecialchars(
-            $order['buyer_name'] ?? '-'
+            $order['buyer_name']
+            ?? '-'
         ) ?>
 
     </p>
@@ -1192,7 +1636,8 @@ body {
         </strong>
 
         <?= htmlspecialchars(
-            $order['phone'] ?? '-'
+            $order['phone']
+            ?? '-'
         ) ?>
 
     </p>
@@ -1206,11 +1651,13 @@ body {
 
         <?= nl2br(
             htmlspecialchars(
-                $order['address'] ?? '-'
+                $order['address']
+                ?? '-'
             )
         ) ?>
 
     </p>
+
 
 </div>
 
@@ -1221,17 +1668,21 @@ body {
 
 <div class="card shipping-box">
 
+
     <h2>
         🚚 ข้อมูลการจัดส่ง
     </h2>
 
+
     <br>
+
 
     <p>
 
         <strong>
             บริษัทขนส่ง:
         </strong>
+
 
         <?= !empty(
             $order['shipping_company']
@@ -1253,6 +1704,7 @@ body {
             เลขพัสดุ:
         </strong>
 
+
         <?= !empty(
             $order['tracking_number']
         )
@@ -1266,6 +1718,7 @@ body {
 
     </p>
 
+
 </div>
 
 
@@ -1275,9 +1728,13 @@ body {
 
 <div class="card slip-box">
 
+
     <h2>
         💳 หลักฐานการชำระเงิน
     </h2>
+
+
+    <br>
 
 
     <?php if (
@@ -1288,25 +1745,35 @@ body {
 
 
         <a
-            href="<?= htmlspecialchars($slip_url) ?>"
+            href="<?= htmlspecialchars(
+                $slip_url
+            ) ?>"
             target="_blank"
         >
 
+
             <img
-                src="<?= htmlspecialchars($slip_url) ?>"
+                src="<?= htmlspecialchars(
+                    $slip_url
+                ) ?>"
                 class="slip-image"
                 alt="สลิปการชำระเงิน"
             >
+
 
         </a>
 
 
         <a
-            href="<?= htmlspecialchars($slip_url) ?>"
+            href="<?= htmlspecialchars(
+                $slip_url
+            ) ?>"
             target="_blank"
             class="open-slip"
         >
+
             🔍 เปิดรูปขนาดเต็ม
+
         </a>
 
 
@@ -1315,7 +1782,12 @@ body {
         ): ?>
 
 
-            <div class="payment-status payment-paid">
+            <div
+                class="
+                    payment-status
+                    payment-paid
+                "
+            >
 
                 ✅ ตรวจสอบการชำระเงินเสร็จแล้ว
 
@@ -1325,7 +1797,12 @@ body {
         <?php else: ?>
 
 
-            <div class="payment-status payment-pending">
+            <div
+                class="
+                    payment-status
+                    payment-pending
+                "
+            >
 
                 ⏳ รอตรวจสอบสลิป
 
@@ -1337,11 +1814,13 @@ body {
                 action="order_detail.php?id=<?= (int)$order['id'] ?>"
             >
 
+
                 <input
                     type="hidden"
                     name="order_id"
                     value="<?= (int)$order['id'] ?>"
                 >
+
 
                 <input
                     type="hidden"
@@ -1364,6 +1843,7 @@ body {
 
                 </button>
 
+
             </form>
 
 
@@ -1378,11 +1858,14 @@ body {
             ❌ พบข้อมูลสลิปในฐานข้อมูล
             แต่ไม่พบไฟล์รูป
 
+
             <br><br>
+
 
             <strong>
                 ชื่อไฟล์:
             </strong>
+
 
             <?= htmlspecialchars(
                 $slip
@@ -1403,6 +1886,7 @@ body {
 
     <?php endif; ?>
 
+
 </div>
 
 
@@ -1412,3 +1896,4 @@ body {
 </body>
 
 </html>
+```
