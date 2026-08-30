@@ -1,0 +1,82 @@
+/* ================================
+   PD SHOP THEME
+================================ */
+
+:root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #18181b;
+    --muted: #71717a;
+    --border: #e4e4e7;
+    --nav: rgba(255,255,255,.92);
+}
+
+html.dark-theme {
+    --bg: #09090b;
+    --card: #18181b;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #3f3f46;
+    --nav: rgba(24,24,27,.92);
+}
+
+body {
+    background: var(--bg) !important;
+    color: var(--text);
+    transition:
+        background .35s ease,
+        color .35s ease;
+}
+
+.card {
+    background: var(--card);
+    color: var(--text);
+    transition:
+        background .35s ease,
+        color .35s ease,
+        transform .25s ease,
+        box-shadow .25s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.navbar {
+    background: var(--nav) !important;
+    backdrop-filter: blur(15px);
+    transition: background .35s ease;
+}
+
+.text-secondary {
+    color: var(--muted) !important;
+}
+
+.form-control,
+.form-select {
+    background: var(--card);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.form-control:focus,
+.form-select:focus {
+    background: var(--card);
+    color: var(--text);
+}
+
+.theme-toggle {
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all .3s ease;
+}
+
+.theme-toggle:hover {
+    transform: rotate(15deg) scale(1.08);
+}
